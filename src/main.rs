@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::File,
-    io::{stdin, BufReader, Read, Result},
+    io::{stdin, stdout, BufReader, Read, Result, Write},
 };
 
 use crate::interpreter::interpret;
@@ -15,6 +15,7 @@ fn cli() -> Result<()> {
 
     loop {
         print!("> ");
+        stdout().flush()?;
         match stdin().read_line(&mut buffer)? {
             0 => {
                 println!("");
@@ -22,6 +23,7 @@ fn cli() -> Result<()> {
             }
             _ => {
                 interpret(buffer.as_bytes())?;
+                buffer.clear();
             }
         }
     }
