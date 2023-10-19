@@ -1,7 +1,8 @@
 #![allow(dead_code)]
+use phf::phf_map;
 use std::{iter::Peekable, slice::Iter};
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
     LeftParentheses,
     RightParentheses,
@@ -55,12 +56,34 @@ pub enum TokenType {
     // EOF,
 }
 
+const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
+    "and" => TokenType::And,
+    "or" => TokenType::Or,
+    "function" => TokenType::Function,
+    "class" => TokenType::Class,
+    "interface" => TokenType::Interface,
+    "implements" => TokenType::Implements,
+    "if" => TokenType::If,
+    "else" => TokenType::Else,
+    "bool" => TokenType::Bool,
+    "true" => TokenType::True,
+    "false" => TokenType::False,
+    "null" => TokenType::Null,
+    "while" => TokenType::While,
+    "for" => TokenType::For,
+    "return" => TokenType::Return,
+    "break" => TokenType::Break,
+    "print" => TokenType::Print,
+    "self" => TokenType::SelfTok,
+    "var" => TokenType::Var,
+    "const" => TokenType::Const,
+};
+
 #[derive(PartialEq, Debug)]
 pub enum Value {
     None,
     Num(f64),
     Str(String),
-    Bool(bool),
     Name(String),
 }
 
@@ -195,28 +218,9 @@ fn identifier(scanner: &mut Scanner, first_char: u8) -> Token {
         id.push(*scanner.source_iter.next().unwrap() as char);
     }
 
-    match id.as_str() {
-        "and" => Token::new(TokenType::And, scanner.line),
-        "or" => Token::new(TokenType::Or, scanner.line),
-        "function" => Token::new(TokenType::Function, scanner.line),
-        "class" => Token::new(TokenType::Class, scanner.line),
-        "interface" => Token::new(TokenType::Interface, scanner.line),
-        "implements" => Token::new(TokenType::Implements, scanner.line),
-        "if" => Token::new(TokenType::If, scanner.line),
-        "else" => Token::new(TokenType::Else, scanner.line),
-        "bool" => Token::new(TokenType::Bool, scanner.line),
-        "true" => Token::new_with_value(TokenType::True, Value::Bool(true), scanner.line),
-        "false" => Token::new_with_value(TokenType::False, Value::Bool(false), scanner.line),
-        "null" => Token::new(TokenType::Null, scanner.line),
-        "while" => Token::new(TokenType::While, scanner.line),
-        "for" => Token::new(TokenType::For, scanner.line),
-        "return" => Token::new(TokenType::Return, scanner.line),
-        "break" => Token::new(TokenType::Break, scanner.line),
-        "print" => Token::new(TokenType::Print, scanner.line),
-        "self" => Token::new(TokenType::SelfTok, scanner.line),
-        "var" => Token::new(TokenType::Var, scanner.line),
-        "const" => Token::new(TokenType::Const, scanner.line),
-        _ => Token::new_with_value(TokenType::Identifier, Value::Name(id), scanner.line),
+    match KEYWORDS.get(id.as_str()) {
+        Some(token_type) => Token::new(*token_type, scanner.line),
+        None => Token::new_with_value(TokenType::Identifier, Value::Name(id), scanner.line),
     }
 }
 
@@ -434,8 +438,8 @@ mod tests {
             Token::new(TokenType::If, 1),
             Token::new(TokenType::Else, 1),
             Token::new(TokenType::Bool, 1),
-            Token::new_with_value(TokenType::True, Value::Bool(true), 1),
-            Token::new_with_value(TokenType::False, Value::Bool(false), 1),
+            Token::new(TokenType::True, 1),
+            Token::new(TokenType::False, 1),
             Token::new(TokenType::Null, 1),
             Token::new(TokenType::While, 1),
             Token::new(TokenType::For, 1),
