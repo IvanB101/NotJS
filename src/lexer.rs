@@ -212,6 +212,7 @@ fn skip_multi_line_comment(scanner: &mut Scanner) {
 fn number(scanner: &mut Scanner, first_char: u8) -> Token {
     let mut temp = String::new();
     temp.push(first_char as char);
+
     while let Some(b'0'..=b'9') = scanner.source_iter.peek() {
         temp.push(*scanner.source_iter.next().unwrap() as char);
     }
@@ -230,6 +231,7 @@ fn number(scanner: &mut Scanner, first_char: u8) -> Token {
 
 fn string(scanner: &mut Scanner, first_char: u8) -> Token {
     let mut str_value = String::new();
+
     while let Some(chr) = scanner.source_iter.next() {
         if first_char == *chr {
             break;
@@ -270,7 +272,6 @@ impl<'a> Iterator for Scanner<'a> {
                 b'\'' => Some(string(self, *chr)),
                 // # Identifiers
                 b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(identifier(self, *chr)),
-
                 // ### Tokens without value
                 // ## Single character tokens
                 // # Operators
@@ -302,54 +303,42 @@ impl<'a> Iterator for Scanner<'a> {
                 b'.' => Some(Token::new(TokenType::Dot, self.line)),
                 b';' => Some(Token::new(TokenType::Semicolon, self.line)),
                 // ## One or Two character tokens
-                // Bang or BangEqual
-                b'!' => {
-                    let ttype = match self.source_iter.peek() {
-                        Some(b'=') => {
-                            self.source_iter.next();
-                            TokenType::BangEqual
-                        }
-                        _ => TokenType::Bang,
-                    };
-                    Some(Token::new(ttype, self.line))
-                }
-
-                // Equal or EqualEqual
-                b'=' => {
-                    let ttype = match self.source_iter.peek() {
-                        Some(b'=') => {
-                            self.source_iter.next();
-                            TokenType::EqualEqual
-                        }
-                        _ => TokenType::Equal,
-                    };
-                    Some(Token::new(ttype, self.line))
-                }
-
-                // Greater or GreaterEqual
-                b'>' => {
-                    let ttype = match self.source_iter.peek() {
-                        Some(b'=') => {
-                            self.source_iter.next();
-                            TokenType::GreaterEqual
-                        }
-                        _ => TokenType::Greater,
-                    };
-                    Some(Token::new(ttype, self.line))
-                }
-
-                // Less or LessEqual
-                b'<' => {
-                    let ttype = match self.source_iter.peek() {
-                        Some(b'=') => {
-                            self.source_iter.next();
-                            TokenType::LessEqual
-                        }
-                        _ => TokenType::Less,
-                    };
-                    Some(Token::new(ttype, self.line))
-                }
-
+                b'!' => Some(Token::new(
+                    if let Some(b'=') = self.source_iter.peek() {
+                        self.source_iter.next();
+                        TokenType::BangEqual
+                    } else {
+                        TokenType::Bang
+                    },
+                    self.line,
+                )),
+                b'=' => Some(Token::new(
+                    if let Some(b'=') = self.source_iter.peek() {
+                        self.source_iter.next();
+                        TokenType::EqualEqual
+                    } else {
+                        TokenType::Equal
+                    },
+                    self.line,
+                )),
+                b'>' => Some(Token::new(
+                    if let Some(b'=') = self.source_iter.peek() {
+                        self.source_iter.next();
+                        TokenType::GreaterEqual
+                    } else {
+                        TokenType::Greater
+                    },
+                    self.line,
+                )),
+                b'<' => Some(Token::new(
+                    if let Some(b'=') = self.source_iter.peek() {
+                        self.source_iter.next();
+                        TokenType::LessEqual
+                    } else {
+                        TokenType::Less
+                    },
+                    self.line,
+                )),
                 _ => {
                     println!("Error: Unexpected character: {}", *chr as char);
                     Some(Token::new(TokenType::Error, self.line))
