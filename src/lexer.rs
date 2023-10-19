@@ -1,10 +1,7 @@
 #![allow(dead_code)]
+use core::fmt;
 use phf::phf_map;
-use std::{
-    io::{Error, ErrorKind, Result},
-    iter::Peekable,
-    slice::Iter,
-};
+use std::{iter::Peekable, slice::Iter};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -84,7 +81,7 @@ const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
     "const" => TokenType::Const,
 };
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone)]
 pub enum Value {
     None,
     Null,
@@ -112,6 +109,28 @@ impl Value {
         match self {
             Value::Bool(bool) => *bool,
             _ => panic!("It's Nil, you lost the game"),
+        }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Value::None => false,
+            Value::Null => false,
+            Value::Num(num) => *num != 0.0,
+            Value::Str(str) => !str.is_empty(),
+            Value::Bool(bool) => *bool,
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::None => write!(f, "None"),
+            Value::Null => write!(f, "Null"),
+            Value::Num(num) => write!(f, "{}", num),
+            Value::Str(str) => write!(f, "{}", str),
+            Value::Bool(bool) => write!(f, "{}", bool),
         }
     }
 }
