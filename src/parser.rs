@@ -115,6 +115,19 @@ impl fmt::Debug for Expr {
     }
 }
 
+fn report_error(token: Option<Token>, message: &str) -> Result<Expr> {
+    match token {
+        Some(token) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("{}: at {}", message, token.line),
+        )),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("{}: at end", message),
+        )),
+    }
+}
+
 /*
 expression     → equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -342,25 +355,21 @@ impl<'a> Parser<'a> {
             self.scanner.next();
         }
     }
-}
 
-fn report_error(token: Option<Token>, message: &str) -> Result<()> {
-    match token {
-        Some(token) => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: at {}", message, token.line),
-        )),
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: at {}", message, "EOF"),
-        )),
+    fn parse(&mut self) -> Result<Expr> {
+        let expr = self.expression();
+
+        match self.scanner.next() {
+            Some(token) => report_error(Some(token), "Expected EOF"),
+            None => Ok(expr),
+        }
     }
 }
 
 pub fn parse(source: &[u8]) -> Result<Expr> {
-    let mut parser_struct = Parser::new(source);
+    let mut parser = Parser::new(source);
 
-    Ok(parser_struct.expression())
+    parser.parse()
 }
 
 #[cfg(test)]
