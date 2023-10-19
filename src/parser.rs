@@ -53,41 +53,53 @@ fn lexeme(token_type: TokenType) -> &'static str {
     }
 }
 
-#[derive(PartialEq, Clone)]
-pub struct Expr {
-    pub left: Option<Box<Expr>>,
-    pub operator: Option<Token>,
-    pub right: Option<Box<Expr>>,
-    pub literal: Option<Value>,
-}
+// #[derive(PartialEq, Clone)]
+// pub struct Expr {
+//     pub left: Option<Box<Expr>>,
+//     pub operator: Option<Token>,
+//     pub right: Option<Box<Expr>>,
+//     pub literal: Option<Value>,
+// }
 
-trait Evaluable {
-    fn evaluate(&self) -> Value;
-}
+// pub enum Expr {
+//     Binary {
+//         left: Box<Expr>,
+//         operator: Token,
+//         right: Box<Expr>,
+//     },
+//     Unary {
+//         operator: Token,
+//         expression: Box<Expr>,
+//     },
+//     Grouping {
+//         expression: Box<Expr>,
+//     },
+//     Literal {
+//         value: Value,
+//     },
+// }
 
-struct Unary {
-    pub operator: Token,
-    pub expression: Box<Expr>,
-}
-
-impl Evaluable for Unary {
-    fn evaluate(&self) -> Value {
-        todo!()
-    }
-}
-
-struct Binary {
+pub struct Binary {
     pub left: Box<dyn Evaluable>,
     pub operator: Token,
     pub right: Box<dyn Evaluable>,
 }
 
-type Literal = Value;
+pub struct Unary {
+    pub operator: Token,
+    pub expression: Box<dyn Evaluable>,
+}
 
-impl Evaluable for Literal {
-    fn evaluate(&self) -> Value {
-        self.clone()
-    }
+pub struct Grouping {
+    pub expression: Box<dyn Evaluable>,
+}
+
+pub struct Literal {
+    pub value: Value,
+}
+
+pub trait Evaluable {
+    fn evaluate(&self) -> Value;
 }
 
 impl Evaluable for Binary {
@@ -99,70 +111,148 @@ impl Evaluable for Binary {
         } = self
         {
             match operator.token_type {
-                TokenType::Plus => Value::Num(left.evaluate() + right.evaluate()),
-                _ => panic!("I'm down"),
+                // Arithmetic
+                TokenType::Plus => match (left.evaluate(), right.evaluate()) {
+                    (Value::Num(left), Value::Num(right)) => Value::Num(left + right),
+                    (Value::Str(left), Value::Str(right)) => {
+                        Value::Str(format!("{}{}", left, right))
+                    }
+                    _ => {
+                        panic!("Invalid operands for +");
+                    }
+                },
+                TokenType::Minus => {
+                    Value::Num(left.evaluate().extract_num() - right.evaluate().extract_num())
+                }
+                TokenType::Star => {
+                    Value::Num(left.evaluate().extract_num() * right.evaluate().extract_num())
+                }
+                TokenType::Slash => {
+                    Value::Num(left.evaluate().extract_num() / right.evaluate().extract_num())
+                }
+
+                // Comparison
+                TokenType::EqualEqual => Value::Bool(left.evaluate() == right.evaluate()),
+                TokenType::BangEqual => Value::Bool(left.evaluate() != right.evaluate()),
+                TokenType::Greater => {
+                    Value::Bool(left.evaluate().extract_num() > right.evaluate().extract_num())
+                }
+                TokenType::GreaterEqual => {
+                    Value::Bool(left.evaluate().extract_num() >= right.evaluate().extract_num())
+                }
+                TokenType::Less => {
+                    Value::Bool(left.evaluate().extract_num() < right.evaluate().extract_num())
+                }
+                TokenType::LessEqual => {
+                    Value::Bool(left.evaluate().extract_num() <= right.evaluate().extract_num())
+                }
+
+                _ => {
+                    panic!("Invalid binary operator");
+                }
             }
         } else {
-            panic!("I'm down");
+            panic!("Invalid binary expression");
         }
     }
 }
 
-impl fmt::Debug for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            // Binary
-            Expr {
-                left: Some(left),
-                operator: Some(token),
-                right: Some(right),
-                literal: None,
-            } => {
-                // write!(f, "(")?;
-                write!(f, "{:?} ", left)?;
-                write!(f, "{} ", lexeme(token.token_type))?;
-                write!(f, "{:?}", right)
+impl Evaluable for Unary {
+    fn evaluate(&self) -> Value {
+        if let Unary {
+            operator,
+            expression,
+        } = self
+        {
+            match operator.token_type {
+                TokenType::Minus => match expression.evaluate() {
+                    Value::Num(num) => Value::Num(-num),
+                    _ => {
+                        panic!("Invalid operand for -");
+                    }
+                },
+                TokenType::Bang => Value::Bool(!expression.evaluate().extract_bool()),
+                _ => {
+                    panic!("Invalid unary operator");
+                }
             }
-            // Unary
-            Expr {
-                left: None,
-                operator: Some(token),
-                right: Some(right),
-                literal: None,
-            } => {
-                // write!(f, "(")?;
-                write!(f, "{} ", lexeme(token.token_type))?;
-                write!(f, "{:?}", right)
-            }
-            // Literal
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(literal),
-            } => match literal {
-                Value::Num(n) => write!(f, "{}", n),
-                Value::Str(s) => write!(f, "{}", s),
-                Value::Bool(b) => write!(f, "{}", b),
-                Value::Null => write!(f, "null"),
-                Value::None => fmt::Result::Ok(()),
-            },
-            // Grouping
-            Expr {
-                left: Some(left),
-                operator: None,
-                right: None,
-                literal: None,
-            } => {
-                write!(f, "(")?;
-                write!(f, "{:?})", left)
-            }
-            _ => fmt::Result::Ok(()),
+        } else {
+            panic!("Invalid unary expression");
         }
     }
 }
 
-fn report_error(token: Option<Token>, message: &str) -> Result<Expr> {
+impl Evaluable for Grouping {
+    fn evaluate(&self) -> Value {
+        if let Grouping { expression } = self {
+            expression.evaluate()
+        } else {
+            panic!("Invalid grouping expression");
+        }
+    }
+}
+
+impl Evaluable for Literal {
+    fn evaluate(&self) -> Value {
+        self.value.clone()
+    }
+}
+
+// impl fmt::Debug for Expr {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             // Binary
+//             Expr {
+//                 left: Some(left),
+//                 operator: Some(token),
+//                 right: Some(right),
+//                 literal: None,
+//             } => {
+//                 // write!(f, "(")?;
+//                 write!(f, "{:?} ", left)?;
+//                 write!(f, "{} ", lexeme(token.token_type))?;
+//                 write!(f, "{:?}", right)
+//             }
+//             // Unary
+//             Expr {
+//                 left: None,
+//                 operator: Some(token),
+//                 right: Some(right),
+//                 literal: None,
+//             } => {
+//                 // write!(f, "(")?;
+//                 write!(f, "{} ", lexeme(token.token_type))?;
+//                 write!(f, "{:?}", right)
+//             }
+//             // Literal
+//             Expr {
+//                 left: None,
+//                 operator: None,
+//                 right: None,
+//                 literal: Some(literal),
+//             } => match literal {
+//                 Value::Num(n) => write!(f, "{}", n),
+//                 Value::Str(s) => write!(f, "{}", s),
+//                 Value::Bool(b) => write!(f, "{}", b),
+//                 Value::Null => write!(f, "null"),
+//                 Value::None => fmt::Result::Ok(()),
+//             },
+//             // Grouping
+//             Expr {
+//                 left: Some(left),
+//                 operator: None,
+//                 right: None,
+//                 literal: None,
+//             } => {
+//                 write!(f, "(")?;
+//                 write!(f, "{:?})", left)
+//             }
+//             _ => fmt::Result::Ok(()),
+//         }
+//     }
+// }
+
+fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Evaluable>> {
     match token {
         Some(token) => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -226,7 +316,7 @@ impl<'a> Parser<'a> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr {
+    fn equality(&mut self) -> Box<dyn Evaluable> {
         let mut expr = self.comparison();
 
         while let Some(Token {
@@ -234,18 +324,17 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
-            expr = Expr {
-                left: Some(Box::new(expr)),
-                operator: self.scanner.next(),
-                right: Some(Box::new(self.comparison())),
-                literal: None,
-            };
+            expr = Box::new(Binary {
+                left: expr,
+                operator: self.scanner.next().unwrap(),
+                right: self.comparison(),
+            });
         }
 
         expr
     }
 
-    fn comparison(&mut self) -> Expr {
+    fn comparison(&mut self) -> Box<dyn Evaluable> {
         let mut expr = self.term();
 
         while let Some(Token {
@@ -254,18 +343,17 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
-            expr = Expr {
-                left: Some(Box::new(expr)),
-                operator: self.scanner.next(),
-                right: Some(Box::new(self.term())),
-                literal: None,
-            };
+            expr = Box::new(Binary {
+                left: expr,
+                operator: self.scanner.next().unwrap(),
+                right: self.term(),
+            });
         }
 
         expr
     }
 
-    fn term(&mut self) -> Expr {
+    fn term(&mut self) -> Box<dyn Evaluable> {
         let mut expr = self.factor();
 
         while let Some(Token {
@@ -273,18 +361,17 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
-            expr = Expr {
-                left: Some(Box::new(expr)),
-                operator: self.scanner.next(),
-                right: Some(Box::new(self.factor())),
-                literal: None,
-            };
+            expr = Box::new(Binary {
+                left: expr,
+                operator: self.scanner.next().unwrap(),
+                right: self.factor(),
+            });
         }
 
         expr
     }
 
-    fn factor(&mut self) -> Expr {
+    fn factor(&mut self) -> Box<dyn Evaluable> {
         let mut expr = self.unary();
 
         while let Some(Token {
@@ -292,35 +379,32 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
-            expr = Expr {
-                left: Some(Box::new(expr)),
-                operator: self.scanner.next(),
-                right: Some(Box::new(self.unary())),
-                literal: None,
-            };
+            expr = Box::new(Binary {
+                left: expr,
+                operator: self.scanner.next().unwrap(),
+                right: self.unary(),
+            });
         }
 
         expr
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Box<dyn Evaluable> {
         if let Some(Token {
             token_type: TokenType::Bang | TokenType::Minus,
             ..
         }) = self.scanner.peek()
         {
-            Expr {
-                left: None,
-                operator: self.scanner.next(),
-                right: Some(Box::new(self.unary())),
-                literal: None,
-            }
+            Box::new(Unary {
+                operator: self.scanner.next().unwrap(),
+                expression: self.unary(),
+            })
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Box<dyn Evaluable> {
         if let Some(Token {
             token_type,
             value,
@@ -333,22 +417,12 @@ impl<'a> Parser<'a> {
             | TokenType::False
             | TokenType::Null = token_type
             {
-                Expr {
-                    left: None,
-                    operator: None,
-                    right: None,
-                    literal: Some(value),
-                }
+                Box::new(Literal { value })
             } else if token_type == TokenType::LeftParentheses {
                 let expr = self.expression();
                 self.consume(TokenType::RightParentheses, "Expected ')' after expression")
                     .unwrap();
-                Expr {
-                    left: Some(Box::new(expr)),
-                    operator: None,
-                    right: None,
-                    literal: None,
-                }
+                Box::new(Grouping { expression: expr })
             } else {
                 panic!(
                     "Expected expression: in token {:?}",
@@ -391,7 +465,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Expr> {
+    fn parse(&mut self) -> Result<Box<dyn Evaluable>> {
         let expr = self.expression();
 
         match self.scanner.next() {
@@ -403,129 +477,8 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Expr> {
+pub fn parse(source: &[u8]) -> Result<Box<dyn Evaluable>> {
     let mut parser = Parser::new(source);
 
     parser.parse()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_number() {
-        let source = b"123";
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(Value::Num(123.0))
-            }
-        );
-    }
-
-    #[test]
-    fn test_parse_string() {
-        let source = br#""hello""#;
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(Value::Str("hello".to_string()))
-            }
-        );
-    }
-
-    #[test]
-    fn test_parse_true() {
-        let source = b"true";
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(Value::Bool(true))
-            }
-        );
-    }
-
-    #[test]
-    fn test_parse_false() {
-        let source = b"false";
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(Value::Bool(false))
-            }
-        );
-    }
-
-    #[test]
-    fn test_parse_null() {
-        let source = b"null";
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(Value::Null)
-            }
-        );
-    }
-
-    #[test]
-    fn test_parse_parentheses() {
-        let source = b"(1 + 2)";
-        let result = parse(source).unwrap();
-        assert_eq!(
-            result,
-            Expr {
-                left: Some(Box::new(Expr {
-                    left: Some(Box::new(Expr {
-                        left: None,
-                        operator: None,
-                        right: None,
-                        literal: Some(Value::Num(1.0))
-                    })),
-                    operator: Some(Token {
-                        token_type: TokenType::Plus,
-                        line: 1,
-                        value: Value::None
-                    }),
-                    right: Some(Box::new(Expr {
-                        left: None,
-                        operator: None,
-                        right: None,
-                        literal: Some(Value::Num(2.0))
-                    })),
-                    literal: None
-                })),
-                operator: None,
-                right: None,
-                literal: None
-            }
-        );
-    }
-
-    // #[test]
-    // fn test_parse_error() {
-    //     let source = b"1 +";
-    //     let result = parse(source);
-    //     assert!(result.is_err());
-    // }
 }
