@@ -269,7 +269,17 @@ fn identifier(scanner: &mut Scanner, first_char: u8) -> Token {
     }
 
     match KEYWORDS.get(id.as_str()) {
-        Some(token_type) => Token::new(*token_type, scanner.line),
+        Some(token_type) => match token_type {
+            TokenType::True => {
+                Token::new_with_value(TokenType::True, Value::Bool(true), scanner.line)
+            }
+            TokenType::False => {
+                Token::new_with_value(TokenType::False, Value::Bool(false), scanner.line)
+            }
+            TokenType::Null => Token::new_with_value(TokenType::Null, Value::Null, scanner.line),
+            _ => Token::new(*token_type, scanner.line),
+        },
+
         None => Token::new_with_value(TokenType::Identifier, Value::Str(id), scanner.line),
     }
 }
