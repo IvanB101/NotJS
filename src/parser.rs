@@ -61,6 +61,53 @@ pub struct Expr {
     pub literal: Option<Value>,
 }
 
+trait Evaluable {
+    fn evaluate(&self) -> Value;
+}
+
+struct Unary {
+    pub operator: Token,
+    pub expression: Box<Expr>,
+}
+
+impl Evaluable for Unary {
+    fn evaluate(&self) -> Value {
+        todo!()
+    }
+}
+
+struct Binary {
+    pub left: Box<dyn Evaluable>,
+    pub operator: Token,
+    pub right: Box<dyn Evaluable>,
+}
+
+type Literal = Value;
+
+impl Evaluable for Literal {
+    fn evaluate(&self) -> Value {
+        self.clone()
+    }
+}
+
+impl Evaluable for Binary {
+    fn evaluate(&self) -> Value {
+        if let Binary {
+            left,
+            operator,
+            right,
+        } = self
+        {
+            match operator.token_type {
+                TokenType::Plus => Value::Num(left.evaluate() + right.evaluate()),
+                _ => panic!("I'm down"),
+            }
+        } else {
+            panic!("I'm down");
+        }
+    }
+}
+
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -162,7 +209,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Box<dyn Evaluable> {
         self.equality()
     }
 
@@ -261,39 +308,25 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Expr {
-        match self.scanner.peek().unwrap().token_type {
-            TokenType::Number => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::String => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::True => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::False => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::Null => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::LeftParentheses => {
-                self.scanner.next();
+        if let Some(Token {
+            token_type,
+            value,
+            line,
+        }) = self.scanner.next()
+        {
+            if let TokenType::Number
+            | TokenType::String
+            | TokenType::True
+            | TokenType::False
+            | TokenType::Null = token_type
+            {
+                Expr {
+                    left: None,
+                    operator: None,
+                    right: None,
+                    literal: Some(value),
+                }
+            } else if token_type == TokenType::LeftParentheses {
                 let expr = self.expression();
                 self.consume(TokenType::RightParentheses, "Expected ')' after expression")
                     .unwrap();
@@ -303,12 +336,18 @@ impl<'a> Parser<'a> {
                     right: None,
                     literal: None,
                 }
+            } else {
+                panic!(
+                    "Expected expression: in token {:?}",
+                    Token {
+                        token_type,
+                        value,
+                        line
+                    }
+                );
             }
-            _ => {
-                let err_token = self.scanner.peek();
-
-                panic!("Expected expression: Error token: {:?}", err_token);
-            }
+        } else {
+            panic!("Unexpected end of file");
         }
     }
 }
