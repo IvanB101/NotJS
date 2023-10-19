@@ -61,6 +61,53 @@ pub struct Expr {
     pub literal: Option<Value>,
 }
 
+trait Evaluable {
+    fn evaluate(&self) -> Value;
+}
+
+struct Unary {
+    pub operator: Token,
+    pub expression: Box<Expr>,
+}
+
+impl Evaluable for Unary {
+    fn evaluate(&self) -> Value {
+        todo!()
+    }
+}
+
+struct Binary {
+    pub left: Box<dyn Evaluable>,
+    pub operator: Token,
+    pub right: Box<dyn Evaluable>,
+}
+
+type Literal = Value;
+
+impl Evaluable for Literal {
+    fn evaluate(&self) -> Value {
+        self.clone()
+    }
+}
+
+impl Evaluable for Binary {
+    fn evaluate(&self) -> Value {
+        if let Binary {
+            left,
+            operator,
+            right,
+        } = self
+        {
+            match operator.token_type {
+                TokenType::Plus => Value::Num(left.evaluate() + right.evaluate()),
+                _ => panic!("I'm down"),
+            }
+        } else {
+            panic!("I'm down");
+        }
+    }
+}
+
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -162,7 +209,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Box<dyn Evaluable> {
         self.equality()
     }
 
