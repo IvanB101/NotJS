@@ -261,39 +261,25 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Expr {
-        match self.scanner.peek().unwrap().token_type {
-            TokenType::Number => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::String => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::True => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::False => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::Null => Expr {
-                left: None,
-                operator: None,
-                right: None,
-                literal: Some(self.scanner.next().unwrap().value),
-            },
-            TokenType::LeftParentheses => {
-                self.scanner.next();
+        if let Some(Token {
+            token_type,
+            value,
+            line,
+        }) = self.scanner.next()
+        {
+            if let TokenType::Number
+            | TokenType::String
+            | TokenType::True
+            | TokenType::False
+            | TokenType::Null = token_type
+            {
+                Expr {
+                    left: None,
+                    operator: None,
+                    right: None,
+                    literal: Some(value),
+                }
+            } else if token_type == TokenType::LeftParentheses {
                 let expr = self.expression();
                 self.consume(TokenType::RightParentheses, "Expected ')' after expression")
                     .unwrap();
@@ -303,12 +289,18 @@ impl<'a> Parser<'a> {
                     right: None,
                     literal: None,
                 }
+            } else {
+                panic!(
+                    "Expected expression: in token {:?}",
+                    Token {
+                        token_type,
+                        value,
+                        line
+                    }
+                );
             }
-            _ => {
-                let err_token = self.scanner.peek();
-
-                panic!("Expected expression: Error token: {:?}", err_token);
-            }
+        } else {
+            panic!("Unexpected end of file");
         }
     }
 }
