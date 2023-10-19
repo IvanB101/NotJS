@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 use phf::phf_map;
-use std::{clone, iter::Peekable, slice::Iter};
+use std::{
+    io::{Error, ErrorKind, Result},
+    iter::Peekable,
+    slice::Iter,
+};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -54,7 +58,6 @@ pub enum TokenType {
     Const,
     // Special tokens
     Error,
-    EoF,
 }
 
 const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
@@ -84,9 +87,33 @@ const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Value {
     None,
+    Null,
     Num(f64),
     Str(String),
-    Name(String),
+    Bool(bool),
+}
+
+impl Value {
+    pub fn extract_num(&self) -> f64 {
+        match self {
+            Value::Num(num) => *num,
+            _ => panic!("It's Nil, you lost the game"),
+        }
+    }
+
+    pub fn extract_str(&self) -> String {
+        match self {
+            Value::Str(str) => str.clone(),
+            _ => panic!("It's Nil, you lost the game"),
+        }
+    }
+
+    pub fn extract_bool(&self) -> bool {
+        match self {
+            Value::Bool(bool) => *bool,
+            _ => panic!("It's Nil, you lost the game"),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -222,7 +249,7 @@ fn identifier(scanner: &mut Scanner, first_char: u8) -> Token {
 
     match KEYWORDS.get(id.as_str()) {
         Some(token_type) => Token::new(*token_type, scanner.line),
-        None => Token::new_with_value(TokenType::Identifier, Value::Name(id), scanner.line),
+        None => Token::new_with_value(TokenType::Identifier, Value::Str(id), scanner.line),
     }
 }
 
@@ -328,7 +355,7 @@ impl<'a> Iterator for Scanner<'a> {
                     Some(Token::new(TokenType::Error, self.line))
                 }
             },
-            None => Some(Token::new(TokenType::EoF, self.line)),
+            None => None,
         }
     }
 }
@@ -463,9 +490,9 @@ mod tests {
         let source = b"foo bar baz";
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
-            Token::new_with_value(TokenType::Identifier, Value::Name(String::from("foo")), 1),
-            Token::new_with_value(TokenType::Identifier, Value::Name(String::from("bar")), 1),
-            Token::new_with_value(TokenType::Identifier, Value::Name(String::from("baz")), 1),
+            Token::new_with_value(TokenType::Identifier, Value::Str(String::from("foo")), 1),
+            Token::new_with_value(TokenType::Identifier, Value::Str(String::from("bar")), 1),
+            Token::new_with_value(TokenType::Identifier, Value::Str(String::from("baz")), 1),
         ];
         for expected_token in expected_tokens {
             assert_eq!(lexer.next(), Some(expected_token));
@@ -530,6 +557,24 @@ mod tests {
             assert_eq!(lexer.next(), Some(expected_token));
         }
         assert_eq!(lexer.next(), Some(Token::new(TokenType::Error, 1)));
+        assert_eq!(lexer.next(), None);
+    }
+
+    #[test]
+    fn test_lexing_parentheses() {
+        let source = b"(){}[]";
+        let mut lexer = Scanner::new(source);
+        let expected_tokens = vec![
+            Token::new(TokenType::LeftParentheses, 1),
+            Token::new(TokenType::RightParentheses, 1),
+            Token::new(TokenType::LeftBrace, 1),
+            Token::new(TokenType::RightBrace, 1),
+            Token::new(TokenType::LeftBracket, 1),
+            Token::new(TokenType::RightBracket, 1),
+        ];
+        for expected_token in expected_tokens {
+            assert_eq!(lexer.next(), Some(expected_token));
+        }
         assert_eq!(lexer.next(), None);
     }
 }

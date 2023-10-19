@@ -1,11 +1,11 @@
 use std::io::Result;
 
-use crate::parser::{self, print_ast_from_expr};
+use crate::{parser::{self, Expr}, lexer::Value};
 
 pub fn interpret(source: &[u8]) -> Result<()> {
     let expr = parser::parse(source)?;
 
-    print_ast_from_expr(expr);
+    print!("{:?}", expr);
 
     Ok(())
 }

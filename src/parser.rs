@@ -1,32 +1,6 @@
-use std::{io::Result, iter::Peekable};
+use std::{fmt, io::Result, iter::Peekable};
 
 use crate::lexer::{Scanner, Token, TokenType, Value};
-
-pub fn print_ast_from_expr(expr: Expr) {
-    match expr.operator {
-        Some(token) => {
-            print!("(");
-            print_ast_from_expr(*expr.left.unwrap());
-            print!(" {} ", lexeme(token.token_type));
-            // print!(" {} ", token.lexeme);
-            print_ast_from_expr(*expr.right.unwrap());
-            print!(")");
-        }
-        None => match expr.literal {
-            Some(literal) => match literal {
-                Literal::NumberLiteral(n) => print!("{}", n),
-                Literal::StringLiteral(s) => print!("{}", s),
-                Literal::BoolLiteral(b) => print!("{}", b),
-                Literal::Null => print!("null"),
-            },
-            None => {
-                print!("(");
-                print_ast_from_expr(*expr.left.unwrap());
-                print!(")");
-            }
-        },
-    }
-}
 
 fn lexeme(token_type: TokenType) -> &'static str {
     match token_type {
@@ -76,24 +50,69 @@ fn lexeme(token_type: TokenType) -> &'static str {
         TokenType::Var => "var",
         TokenType::While => "while",
         TokenType::Error => "error",
-        TokenType::EoF => "eof",
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Expr {
     pub left: Option<Box<Expr>>,
     pub operator: Option<Token>,
     pub right: Option<Box<Expr>>,
-    pub literal: Option<Literal>,
+    pub literal: Option<Value>,
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum Literal {
-    NumberLiteral(f64),
-    StringLiteral(String),
-    BoolLiteral(bool),
-    Null,
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // Binary
+            Expr {
+                left: Some(left),
+                operator: Some(token),
+                right: Some(right),
+                literal: None,
+            } => {
+                // write!(f, "(")?;
+                write!(f, "{:?} ", left)?;
+                write!(f, "{} ", lexeme(token.token_type))?;
+                write!(f, "{:?}", right)
+            }
+            // Unary
+            Expr {
+                left: None,
+                operator: Some(token),
+                right: Some(right),
+                literal: None,
+            } => {
+                // write!(f, "(")?;
+                write!(f, "{} ", lexeme(token.token_type))?;
+                write!(f, "{:?}", right)
+            }
+            // Literal
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(literal),
+            } => match literal {
+                Value::Num(n) => write!(f, "{}", n),
+                Value::Str(s) => write!(f, "{}", s),
+                Value::Bool(b) => write!(f, "{}", b),
+                Value::Null => write!(f, "null"),
+                Value::None => fmt::Result::Ok(()),
+            },
+            // Grouping
+            Expr {
+                left: Some(left),
+                operator: None,
+                right: None,
+                literal: None,
+            } => {
+                write!(f, "(")?;
+                write!(f, "{:?})", left)
+            }
+            _ => fmt::Result::Ok(()),
+        }
+    }
 }
 
 /*
@@ -117,7 +136,6 @@ primary        → NUMBER | STRING | "true" | "false" | "nil"
 
 struct Parser<'a> {
     scanner: Peekable<Scanner<'a>>,
-    // previous: Option<Token>,
 }
 
 impl<'a> Parser<'a> {
@@ -127,26 +145,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek(&mut self) -> &Token {
-        match self.scanner.peek() {
-            Some(token) => token,
-            None => panic!("Expected token"),
-        }
-    }
-
-    fn chech(&mut self, ttype: TokenType) -> bool {
-        match self.scanner.peek() {
-            Some(token) => token.token_type == ttype,
-            None => false,
-        }
-    }
-
     fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token> {
-        if self.chech(ttype) {
-            return Ok(self.scanner.next().unwrap());
+        if let Some(token) = self.scanner.peek() {
+            if token.token_type == ttype {
+                return Ok(self.scanner.next().unwrap());
+            }
         }
 
-        let err_token = self.peek();
+        let err_token = self.scanner.next();
 
         Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -163,10 +169,11 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> Expr {
         let mut expr = self.comparison();
 
-        while match self.peek().token_type {
-            TokenType::BangEqual | TokenType::EqualEqual => true,
-            _ => false,
-        } {
+        while let Some(Token {
+            token_type: TokenType::BangEqual | TokenType::EqualEqual,
+            ..
+        }) = self.scanner.peek()
+        {
             expr = Expr {
                 left: Some(Box::new(expr)),
                 operator: self.scanner.next(),
@@ -181,13 +188,12 @@ impl<'a> Parser<'a> {
     fn comparison(&mut self) -> Expr {
         let mut expr = self.term();
 
-        while match self.peek().token_type {
-            TokenType::Greater
-            | TokenType::GreaterEqual
-            | TokenType::Less
-            | TokenType::LessEqual => true,
-            _ => false,
-        } {
+        while let Some(Token {
+            token_type:
+                TokenType::Greater | TokenType::GreaterEqual | TokenType::Less | TokenType::LessEqual,
+            ..
+        }) = self.scanner.peek()
+        {
             expr = Expr {
                 left: Some(Box::new(expr)),
                 operator: self.scanner.next(),
@@ -202,10 +208,11 @@ impl<'a> Parser<'a> {
     fn term(&mut self) -> Expr {
         let mut expr = self.factor();
 
-        while match self.peek().token_type {
-            TokenType::Minus | TokenType::Plus => true,
-            _ => false,
-        } {
+        while let Some(Token {
+            token_type: TokenType::Minus | TokenType::Plus,
+            ..
+        }) = self.scanner.peek()
+        {
             expr = Expr {
                 left: Some(Box::new(expr)),
                 operator: self.scanner.next(),
@@ -220,10 +227,11 @@ impl<'a> Parser<'a> {
     fn factor(&mut self) -> Expr {
         let mut expr = self.unary();
 
-        while match self.peek().token_type {
-            TokenType::Slash | TokenType::Star => true,
-            _ => false,
-        } {
+        while let Some(Token {
+            token_type: TokenType::Slash | TokenType::Star,
+            ..
+        }) = self.scanner.peek()
+        {
             expr = Expr {
                 left: Some(Box::new(expr)),
                 operator: self.scanner.next(),
@@ -236,73 +244,78 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Expr {
-        match self.peek().token_type {
-            TokenType::Bang | TokenType::Minus => Expr {
+        if let Some(Token {
+            token_type: TokenType::Bang | TokenType::Minus,
+            ..
+        }) = self.scanner.peek()
+        {
+            Expr {
                 left: None,
-                operator: Some(self.scanner.next().unwrap()),
+                operator: self.scanner.next(),
                 right: Some(Box::new(self.unary())),
                 literal: None,
-            },
-            _ => self.primary(),
+            }
+        } else {
+            self.primary()
         }
     }
 
     fn primary(&mut self) -> Expr {
-        match self.peek().token_type {
+        match self.scanner.peek().unwrap().token_type {
             TokenType::Number => Expr {
                 left: None,
                 operator: None,
                 right: None,
-                literal: Some(Literal::NumberLiteral(
-                    match self.scanner.next().unwrap().value {
-                        Value::Num(n) => n,
-                        _ => panic!("Expected number"),
-                    },
-                )),
+                literal: Some(self.scanner.next().unwrap().value),
             },
             TokenType::String => Expr {
                 left: None,
                 operator: None,
                 right: None,
-                literal: Some(Literal::StringLiteral(
-                    match self.scanner.next().unwrap().value {
-                        Value::Str(s) => s,
-                        _ => panic!("Expected string"),
-                    },
-                )),
+                literal: Some(self.scanner.next().unwrap().value),
             },
             TokenType::True => Expr {
                 left: None,
                 operator: None,
                 right: None,
-                literal: Some(Literal::BoolLiteral(true)),
+                literal: Some(self.scanner.next().unwrap().value),
             },
             TokenType::False => Expr {
                 left: None,
                 operator: None,
                 right: None,
-                literal: Some(Literal::BoolLiteral(false)),
+                literal: Some(self.scanner.next().unwrap().value),
             },
             TokenType::Null => Expr {
                 left: None,
                 operator: None,
                 right: None,
-                literal: Some(Literal::Null),
+                literal: Some(self.scanner.next().unwrap().value),
             },
             TokenType::LeftParentheses => {
+                self.scanner.next();
                 let expr = self.expression();
                 self.consume(TokenType::RightParentheses, "Expected ')' after expression")
                     .unwrap();
-                expr
+                Expr {
+                    left: Some(Box::new(expr)),
+                    operator: None,
+                    right: None,
+                    literal: None,
+                }
             }
             _ => {
-                let err_token = self.peek();
+                let err_token = self.scanner.peek();
 
                 panic!("Expected expression: Error token: {:?}", err_token);
             }
         }
     }
 }
+
+// fn extractLiteral(tok : Token) - {
+
+// }
 
 impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
@@ -311,7 +324,7 @@ impl<'a> Parser<'a> {
                 TokenType::Semicolon => {
                     return;
                 }
-                _ => match self.peek().token_type {
+                _ => match self.scanner.peek().unwrap().token_type {
                     TokenType::Class
                     | TokenType::Function
                     | TokenType::Var
@@ -366,7 +379,7 @@ mod tests {
                     left: None,
                     operator: None,
                     right: None,
-                    literal: Some(Literal::NumberLiteral(1.0)),
+                    literal: Some(Value::Num(1.0)),
                 })),
                 operator: Some(Token {
                     token_type: TokenType::Plus,
@@ -379,7 +392,7 @@ mod tests {
                         left: None,
                         operator: None,
                         right: None,
-                        literal: Some(Literal::NumberLiteral(2.0)),
+                        literal: Some(Value::Num(2.0)),
                     })),
                     operator: Some(Token {
                         token_type: TokenType::Star,
@@ -390,7 +403,7 @@ mod tests {
                         left: None,
                         operator: None,
                         right: None,
-                        literal: Some(Literal::NumberLiteral(3.0)),
+                        literal: Some(Value::Num(3.0)),
                     })),
                     literal: None,
                 })),

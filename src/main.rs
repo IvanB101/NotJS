@@ -47,7 +47,7 @@ fn main() {
 
     match args.as_slice() {
         [] => {
-            let source = b"8 / 2 - 1 == 1 + 2 * 3;";
+            let source = b"8 / (3 - 1) == 1 + 2 * -3;";
 
             interpreter::interpret(source).unwrap();
 
