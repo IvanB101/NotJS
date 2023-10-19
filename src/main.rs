@@ -24,6 +24,7 @@ fn cli() -> Result<()> {
             _ => {
                 interpret(buffer.as_bytes())?;
                 buffer.clear();
+                println!("");
             }
         }
     }
@@ -46,6 +47,12 @@ fn main() {
 
     match args.as_slice() {
         [] => {
+            let source = b"8 / (3 - 1) == 1 + 2 * -3;";
+
+            interpreter::interpret(source).unwrap();
+
+            println!("\nEjecucion de CLI: ");
+
             cli().unwrap();
         }
         [filepath] => {
