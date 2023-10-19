@@ -48,14 +48,6 @@ fn evaluate(expr: Expr) -> Value {
                 Value::Bool(evaluate(*left).extract_num() <= evaluate(*right).extract_num())
             }
 
-            // Logical
-            TokenType::And => {
-                Value::Bool(evaluate(*left).is_truthy() && evaluate(*right).is_truthy())
-            }
-            TokenType::Or => {
-                Value::Bool(evaluate(*left).is_truthy() || evaluate(*right).is_truthy())
-            }
-
             _ => {
                 panic!("Invalid binary operator");
             }
@@ -125,13 +117,6 @@ mod tests {
         let source = b"1 + 2 * 3 - 4 / 2";
         let expr = parse(source).unwrap();
         assert_eq!(evaluate(expr), Value::Num(5.0));
-    }
-
-    #[test]
-    fn test_interpret_comparison() {
-        let source = b"1 < 2 and 3 >= 3";
-        let expr = parse(source).unwrap();
-        assert_eq!(evaluate(expr), Value::Bool(true));
     }
 
     #[test]
