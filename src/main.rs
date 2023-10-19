@@ -46,7 +46,11 @@ fn main() {
 
     match args.as_slice() {
         [] => {
-            cli().unwrap();
+            // cli().unwrap();
+
+            let source = b"8 / 2 - 1 == 1 + 2 * 3;";
+
+            interpreter::interpret(source).unwrap();
         }
         [filepath] => {
             run_file(filepath).unwrap();
