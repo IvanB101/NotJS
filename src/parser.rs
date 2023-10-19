@@ -162,6 +162,19 @@ impl fmt::Debug for Expr {
     }
 }
 
+fn report_error(token: Option<Token>, message: &str) -> Result<Expr> {
+    match token {
+        Some(token) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("{}: in {:?} at {}", message, token.token_type, token.line),
+        )),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("{}: at end", message),
+        )),
+    }
+}
+
 /*
 expression     → equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -352,10 +365,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-// fn extractLiteral(tok : Token) - {
-
-// }
-
 impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
         while let Some(token) = self.scanner.next() {
@@ -381,25 +390,23 @@ impl<'a> Parser<'a> {
             self.scanner.next();
         }
     }
-}
 
-fn report_error(token: Option<Token>, message: &str) -> Result<()> {
-    match token {
-        Some(token) => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: at {}", message, token.line),
-        )),
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: at {}", message, "EOF"),
-        )),
+    fn parse(&mut self) -> Result<Expr> {
+        let expr = self.expression();
+
+        match self.scanner.next() {
+            Some(token) => report_error(Some(token), "Expected EOF"),
+            None => Ok(expr),
+        }
+
+        // Ok(expr)
     }
 }
 
 pub fn parse(source: &[u8]) -> Result<Expr> {
-    let mut parser_struct = Parser::new(source);
+    let mut parser = Parser::new(source);
 
-    Ok(parser_struct.expression())
+    parser.parse()
 }
 
 #[cfg(test)]
@@ -407,47 +414,118 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parser() {
-        let source = b"1 + 2 * 3;";
-        let expr = parse(source).unwrap();
-
+    fn test_parse_number() {
+        let source = b"123";
+        let result = parse(source).unwrap();
         assert_eq!(
-            expr,
+            result,
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(Value::Num(123.0))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_string() {
+        let source = br#""hello""#;
+        let result = parse(source).unwrap();
+        assert_eq!(
+            result,
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(Value::Str("hello".to_string()))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_true() {
+        let source = b"true";
+        let result = parse(source).unwrap();
+        assert_eq!(
+            result,
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(Value::Bool(true))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_false() {
+        let source = b"false";
+        let result = parse(source).unwrap();
+        assert_eq!(
+            result,
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(Value::Bool(false))
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_null() {
+        let source = b"null";
+        let result = parse(source).unwrap();
+        assert_eq!(
+            result,
+            Expr {
+                left: None,
+                operator: None,
+                right: None,
+                literal: Some(Value::Null)
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_parentheses() {
+        let source = b"(1 + 2)";
+        let result = parse(source).unwrap();
+        assert_eq!(
+            result,
             Expr {
                 left: Some(Box::new(Expr {
-                    left: None,
-                    operator: None,
-                    right: None,
-                    literal: Some(Value::Num(1.0)),
-                })),
-                operator: Some(Token {
-                    token_type: TokenType::Plus,
-
-                    line: 1,
-                    value: Value::None,
-                }),
-                right: Some(Box::new(Expr {
                     left: Some(Box::new(Expr {
                         left: None,
                         operator: None,
                         right: None,
-                        literal: Some(Value::Num(2.0)),
+                        literal: Some(Value::Num(1.0))
                     })),
                     operator: Some(Token {
-                        token_type: TokenType::Star,
+                        token_type: TokenType::Plus,
                         line: 1,
-                        value: Value::None,
+                        value: Value::None
                     }),
                     right: Some(Box::new(Expr {
                         left: None,
                         operator: None,
                         right: None,
-                        literal: Some(Value::Num(3.0)),
+                        literal: Some(Value::Num(2.0))
                     })),
-                    literal: None,
+                    literal: None
                 })),
-                literal: None,
+                operator: None,
+                right: None,
+                literal: None
             }
         );
     }
+
+    // #[test]
+    // fn test_parse_error() {
+    //     let source = b"1 +";
+    //     let result = parse(source);
+    //     assert!(result.is_err());
+    // }
 }
