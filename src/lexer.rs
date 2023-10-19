@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use phf::phf_map;
-use std::{iter::Peekable, slice::Iter};
+use std::{clone, iter::Peekable, slice::Iter};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
@@ -54,7 +54,7 @@ pub enum TokenType {
     Const,
     // Special tokens
     Error,
-    // EOF,
+    EoF,
 }
 
 const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
@@ -81,7 +81,7 @@ const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
     "const" => TokenType::Const,
 };
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Value {
     None,
     Num(f64),
@@ -89,7 +89,7 @@ pub enum Value {
     Name(String),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: Value,
@@ -328,7 +328,7 @@ impl<'a> Iterator for Scanner<'a> {
                     Some(Token::new(TokenType::Error, self.line))
                 }
             },
-            None => None,
+            None => Some(Token::new(TokenType::EoF, self.line)),
         }
     }
 }

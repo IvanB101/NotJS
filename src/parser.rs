@@ -76,19 +76,20 @@ fn lexeme(token_type: TokenType) -> &'static str {
         TokenType::Var => "var",
         TokenType::While => "while",
         TokenType::Error => "error",
+        TokenType::EoF => "eof",
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Expr {
-    left: Option<Box<Expr>>,
-    operator: Option<Token>,
-    right: Option<Box<Expr>>,
-    literal: Option<Literal>,
+    pub left: Option<Box<Expr>>,
+    pub operator: Option<Token>,
+    pub right: Option<Box<Expr>>,
+    pub literal: Option<Literal>,
 }
 
-#[derive(PartialEq, Debug)]
-enum Literal {
+#[derive(PartialEq, Debug, Clone)]
+pub enum Literal {
     NumberLiteral(f64),
     StringLiteral(String),
     BoolLiteral(bool),
@@ -127,7 +128,10 @@ impl<'a> Parser<'a> {
     }
 
     fn peek(&mut self) -> &Token {
-        self.scanner.peek().unwrap()
+        match self.scanner.peek() {
+            Some(token) => token,
+            None => panic!("Expected token"),
+        }
     }
 
     fn chech(&mut self, ttype: TokenType) -> bool {
