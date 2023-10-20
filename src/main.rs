@@ -91,7 +91,12 @@ fn main() {
             cli().unwrap();
         }
         [filepath] => {
-            run_file(filepath).unwrap();
+            if filepath.ends_with(".notjs") {
+                run_file(filepath).unwrap();
+            } else {
+                println!("File must have .notjs extension");
+                println!("Usage: notjs [path] [-dev]");
+            }
         }
         [filepath, arg2] => {
             if filepath.ends_with(".notjs") && arg2 == "-dev" {
