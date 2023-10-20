@@ -1,6 +1,6 @@
 use std::{fmt, io::Result, iter::Peekable};
 
-use crate::lexer::{Scanner, Token, TokenType, Value};
+use crate::{lexer::{Scanner, Token, TokenType, Value}, interpreter::Expression};
 
 fn lexeme(token_type: TokenType) -> &'static str {
     match token_type {
@@ -80,122 +80,22 @@ fn lexeme(token_type: TokenType) -> &'static str {
 // }
 
 pub struct Binary {
-    pub left: Box<dyn Evaluable>,
+    pub left: Box<dyn Expression>,
     pub operator: Token,
-    pub right: Box<dyn Evaluable>,
+    pub right: Box<dyn Expression>,
 }
 
 pub struct Unary {
     pub operator: Token,
-    pub expression: Box<dyn Evaluable>,
+    pub expression: Box<dyn Expression>,
 }
 
 pub struct Grouping {
-    pub expression: Box<dyn Evaluable>,
+    pub expression: Box<dyn Expression>,
 }
 
 pub struct Literal {
     pub value: Value,
-}
-
-pub trait Evaluable {
-    fn evaluate(&self) -> Value;
-}
-
-impl Evaluable for Binary {
-    fn evaluate(&self) -> Value {
-        if let Binary {
-            left,
-            operator,
-            right,
-        } = self
-        {
-            match operator.token_type {
-                // Arithmetic
-                TokenType::Plus => match (left.evaluate(), right.evaluate()) {
-                    (Value::Num(left), Value::Num(right)) => Value::Num(left + right),
-                    (Value::Str(left), Value::Str(right)) => {
-                        Value::Str(format!("{}{}", left, right))
-                    }
-                    _ => {
-                        panic!("Invalid operands for +");
-                    }
-                },
-                TokenType::Minus => {
-                    Value::Num(left.evaluate().extract_num() - right.evaluate().extract_num())
-                }
-                TokenType::Star => {
-                    Value::Num(left.evaluate().extract_num() * right.evaluate().extract_num())
-                }
-                TokenType::Slash => {
-                    Value::Num(left.evaluate().extract_num() / right.evaluate().extract_num())
-                }
-
-                // Comparison
-                TokenType::EqualEqual => Value::Bool(left.evaluate() == right.evaluate()),
-                TokenType::BangEqual => Value::Bool(left.evaluate() != right.evaluate()),
-                TokenType::Greater => {
-                    Value::Bool(left.evaluate().extract_num() > right.evaluate().extract_num())
-                }
-                TokenType::GreaterEqual => {
-                    Value::Bool(left.evaluate().extract_num() >= right.evaluate().extract_num())
-                }
-                TokenType::Less => {
-                    Value::Bool(left.evaluate().extract_num() < right.evaluate().extract_num())
-                }
-                TokenType::LessEqual => {
-                    Value::Bool(left.evaluate().extract_num() <= right.evaluate().extract_num())
-                }
-
-                _ => {
-                    panic!("Invalid binary operator");
-                }
-            }
-        } else {
-            panic!("Invalid binary expression");
-        }
-    }
-}
-
-impl Evaluable for Unary {
-    fn evaluate(&self) -> Value {
-        if let Unary {
-            operator,
-            expression,
-        } = self
-        {
-            match operator.token_type {
-                TokenType::Minus => match expression.evaluate() {
-                    Value::Num(num) => Value::Num(-num),
-                    _ => {
-                        panic!("Invalid operand for -");
-                    }
-                },
-                TokenType::Bang => Value::Bool(!expression.evaluate().extract_bool()),
-                _ => {
-                    panic!("Invalid unary operator");
-                }
-            }
-        } else {
-            panic!("Invalid unary expression");
-        }
-    }
-}
-
-impl Evaluable for Grouping {
-    fn evaluate(&self) -> Value {
-        if let Grouping { expression } = self {
-            expression.evaluate()
-        } else {
-            panic!("Invalid grouping expression");
-        }
-    }
-}
-
-impl Evaluable for Literal {
-    fn evaluate(&self) -> Value {
-        self.value.clone()
-    }
 }
 
 // impl fmt::Debug for Expr {
@@ -252,7 +152,49 @@ impl Evaluable for Literal {
 //     }
 // }
 
-fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Evaluable>> {
+impl fmt::Debug for Binary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        write!(f, "{:?} ", self.left)?;
+        write!(f, "{} ", lexeme(self.operator.token_type))?;
+        write!(f, "{:?})", self.right)
+    }
+}
+
+impl fmt::Debug for Unary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        write!(f, "{} ", lexeme(self.operator.token_type))?;
+        write!(f, "{:?})", self.expression)
+    }
+}
+
+impl fmt::Debug for Grouping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        write!(f, "{:?})", self.expression)
+    }
+}
+
+impl fmt::Debug for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.value {
+            Value::Num(n) => write!(f, "{}", n),
+            Value::Str(ref s) => write!(f, "{}", s),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Null => write!(f, "null"),
+            Value::None => fmt::Result::Ok(()),
+        }
+    }
+}
+
+impl fmt::Debug for dyn Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Expression>> {
     match token {
         Some(token) => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -312,11 +254,11 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Box<dyn Evaluable> {
+    fn expression(&mut self) -> Box<dyn Expression> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Box<dyn Evaluable> {
+    fn equality(&mut self) -> Box<dyn Expression> {
         let mut expr = self.comparison();
 
         while let Some(Token {
@@ -334,7 +276,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn comparison(&mut self) -> Box<dyn Evaluable> {
+    fn comparison(&mut self) -> Box<dyn Expression> {
         let mut expr = self.term();
 
         while let Some(Token {
@@ -353,7 +295,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn term(&mut self) -> Box<dyn Evaluable> {
+    fn term(&mut self) -> Box<dyn Expression> {
         let mut expr = self.factor();
 
         while let Some(Token {
@@ -371,7 +313,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn factor(&mut self) -> Box<dyn Evaluable> {
+    fn factor(&mut self) -> Box<dyn Expression> {
         let mut expr = self.unary();
 
         while let Some(Token {
@@ -389,7 +331,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn unary(&mut self) -> Box<dyn Evaluable> {
+    fn unary(&mut self) -> Box<dyn Expression> {
         if let Some(Token {
             token_type: TokenType::Bang | TokenType::Minus,
             ..
@@ -404,7 +346,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn primary(&mut self) -> Box<dyn Evaluable> {
+    fn primary(&mut self) -> Box<dyn Expression> {
         if let Some(Token {
             token_type,
             value,
@@ -465,7 +407,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Box<dyn Evaluable>> {
+    fn parse(&mut self) -> Result<Box<dyn Expression>> {
         let expr = self.expression();
 
         match self.scanner.next() {
@@ -477,7 +419,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Box<dyn Evaluable>> {
+pub fn parse(source: &[u8]) -> Result<Box<dyn Expression>> {
     let mut parser = Parser::new(source);
 
     parser.parse()
