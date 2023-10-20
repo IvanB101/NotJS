@@ -1,83 +1,9 @@
 use std::{fmt, io::Result, iter::Peekable};
 
-use crate::{lexer::{Scanner, Token, TokenType, Value}, interpreter::Expression};
-
-fn lexeme(token_type: TokenType) -> &'static str {
-    match token_type {
-        TokenType::LeftParentheses => "(",
-        TokenType::RightParentheses => ")",
-        TokenType::LeftBrace => "{",
-        TokenType::RightBrace => "}",
-        TokenType::LeftBracket => "[",
-        TokenType::RightBracket => "]",
-        TokenType::Interface => "interface",
-        TokenType::Implements => "implements",
-        TokenType::Bool => "boolean",
-        TokenType::Break => "break",
-        TokenType::Continue => "continue",
-        TokenType::Const => "const",
-        TokenType::SelfTok => "self",
-        TokenType::Comma => ",",
-        TokenType::Dot => ".",
-        TokenType::Minus => "-",
-        TokenType::Plus => "+",
-        TokenType::Semicolon => ";",
-        TokenType::Slash => "/",
-        TokenType::Star => "*",
-        TokenType::Bang => "!",
-        TokenType::BangEqual => "!=",
-        TokenType::Equal => "=",
-        TokenType::EqualEqual => "==",
-        TokenType::Greater => ">",
-        TokenType::GreaterEqual => ">=",
-        TokenType::Less => "<",
-        TokenType::LessEqual => "<=",
-        TokenType::Identifier => "identifier",
-        TokenType::String => "string",
-        TokenType::Number => "number",
-        TokenType::And => "and",
-        TokenType::Class => "class",
-        TokenType::Else => "else",
-        TokenType::False => "false",
-        TokenType::Function => "function",
-        TokenType::For => "for",
-        TokenType::If => "if",
-        TokenType::Null => "null",
-        TokenType::Or => "or",
-        TokenType::Print => "print",
-        TokenType::Return => "return",
-        TokenType::True => "true",
-        TokenType::Var => "var",
-        TokenType::While => "while",
-        TokenType::Error => "error",
-    }
-}
-
-// #[derive(PartialEq, Clone)]
-// pub struct Expr {
-//     pub left: Option<Box<Expr>>,
-//     pub operator: Option<Token>,
-//     pub right: Option<Box<Expr>>,
-//     pub literal: Option<Value>,
-// }
-
-// pub enum Expr {
-//     Binary {
-//         left: Box<Expr>,
-//         operator: Token,
-//         right: Box<Expr>,
-//     },
-//     Unary {
-//         operator: Token,
-//         expression: Box<Expr>,
-//     },
-//     Grouping {
-//         expression: Box<Expr>,
-//     },
-//     Literal {
-//         value: Value,
-//     },
-// }
+use crate::{
+    interpreter::Expression,
+    lexer::{Scanner, Token, TokenType, Value},
+};
 
 pub struct Binary {
     pub left: Box<dyn Expression>,
@@ -156,7 +82,7 @@ impl fmt::Debug for Binary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(")?;
         write!(f, "{:?} ", self.left)?;
-        write!(f, "{} ", lexeme(self.operator.token_type))?;
+        write!(f, "{} ", self.operator.value.extract_str())?;
         write!(f, "{:?})", self.right)
     }
 }
@@ -164,7 +90,7 @@ impl fmt::Debug for Binary {
 impl fmt::Debug for Unary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(")?;
-        write!(f, "{} ", lexeme(self.operator.token_type))?;
+        write!(f, "{} ", self.operator.value.extract_str())?;
         write!(f, "{:?})", self.expression)
     }
 }
