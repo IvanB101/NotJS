@@ -1,9 +1,9 @@
-use std::fmt;
+use std::{fmt, io::Result};
 
 use super::{token::Token, value::Value};
 
 pub trait Expression {
-    fn evaluate(&self) -> Value;
+    fn evaluate(&self) -> Result<Value>;
     fn node_to_string(&self) -> String;
 }
 
@@ -30,7 +30,7 @@ impl fmt::Debug for Binary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(")?;
         write!(f, "{:?} ", self.left)?;
-        write!(f, "{} ", self.operator.value.extract_str())?;
+        write!(f, "{} ", self.operator.value)?;
         write!(f, "{:?})", self.right)
     }
 }
@@ -38,7 +38,7 @@ impl fmt::Debug for Binary {
 impl fmt::Debug for Unary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(")?;
-        write!(f, "{} ", self.operator.value.extract_str())?;
+        write!(f, "{} ", self.operator.value)?;
         write!(f, "{:?})", self.expression)
     }
 }
@@ -52,7 +52,7 @@ impl fmt::Debug for Grouping {
 
 impl fmt::Debug for Literal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.value.extract_str())
+        write!(f, "{:?}", self.value)
     }
 }
 

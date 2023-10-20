@@ -1,6 +1,10 @@
 use core::fmt;
+use std::{
+    io::{Error, Result},
+    ops::{Add, Div, Mul, Neg, Not, Sub},
+};
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, PartialOrd)]
 pub enum Value {
     None,
     Null,
@@ -10,27 +14,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn extract_num(&self) -> f64 {
-        match self {
-            Value::Num(num) => *num,
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
-    pub fn extract_str(&self) -> String {
-        match self {
-            Value::Str(str) => str.clone(),
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
-    pub fn extract_bool(&self) -> bool {
-        match self {
-            Value::Bool(bool) => *bool,
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::None => false,
@@ -63,5 +46,71 @@ impl fmt::Display for Value {
             Value::Str(str) => write!(f, "{}", str),
             Value::Bool(bool) => write!(f, "{}", bool),
         }
+    }
+}
+
+impl Add for Value {
+    type Output = Result<Self>;
+
+    fn add(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (Value::Num(val1), Value::Num(val2)) => Ok(Value::Num(val1 + val2)),
+            (Value::Str(val1), Value::Str(val2)) => Ok(Value::Str(val1 + &val2)),
+            (Value::Num(val1), Value::Str(val2)) => Ok(Value::Str(val2 + &val1.to_string())),
+            (Value::Str(val1), Value::Num(val2)) => Ok(Value::Str(val1 + &val2.to_string())),
+            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+        }
+    }
+}
+
+impl Sub for Value {
+    type Output = Result<Self>;
+
+    fn sub(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (Value::Num(val1), Value::Num(val2)) => Ok(Value::Num(val1 - val2)),
+            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+        }
+    }
+}
+
+impl Mul for Value {
+    type Output = Result<Self>;
+
+    fn mul(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (Value::Num(val1), Value::Num(val2)) => Ok(Value::Num(val1 * val2)),
+            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+        }
+    }
+}
+
+impl Div for Value {
+    type Output = Result<Self>;
+
+    fn div(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (Value::Num(val1), Value::Num(val2)) => Ok(Value::Num(val1 / val2)),
+            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+        }
+    }
+}
+
+impl Neg for Value {
+    type Output = Result<Self>;
+
+    fn neg(self) -> Result<Self> {
+        match self {
+            Value::Num(val1) => Ok(Value::Num(-val1)),
+            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+        }
+    }
+}
+
+impl Not for Value {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        Value::Bool(!self.is_truthy())
     }
 }

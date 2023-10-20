@@ -1,50 +1,39 @@
-use std::io::Result;
+use std::io::{Error, Result};
 
 use crate::{
     common::{
         expressions::{Binary, Expression, Grouping, Literal, Unary},
-        token::TokenType,
+        token::{Token, TokenType},
         value::Value,
     },
     parser,
 };
 
 impl Expression for Binary {
-    fn evaluate(&self) -> Value {
-        match self.operator.token_type {
-            // Arithmetic
-            TokenType::Plus => match (self.left.evaluate(), self.right.evaluate()) {
-                (Value::Num(left), Value::Num(right)) => Value::Num(left + right),
-                (Value::Str(left), Value::Str(right)) => Value::Str(format!("{}{}", left, right)),
-                _ => {
-                    panic!("Invalid operands for +");
-                }
-            },
-            TokenType::Minus => {
-                Value::Num(self.left.evaluate().extract_num() - self.right.evaluate().extract_num())
-            }
-            TokenType::Star => {
-                Value::Num(self.left.evaluate().extract_num() * self.right.evaluate().extract_num())
-            }
-            TokenType::Slash => {
-                Value::Num(self.left.evaluate().extract_num() / self.right.evaluate().extract_num())
-            }
+    fn evaluate(&self) -> Result<Value> {
+        let Binary {
+            left,
+            operator: Token { token_type, .. },
+            right,
+        } = self;
 
+        match token_type {
+            // Arithmetic
+            TokenType::Plus => Ok((left.evaluate()? + right.evaluate()?)?),
+            TokenType::Minus => Ok((left.evaluate()? - right.evaluate()?)?),
+            TokenType::Star => Ok((left.evaluate()? * right.evaluate()?)?),
+            TokenType::Slash => Ok((left.evaluate()? / right.evaluate()?)?),
             // Comparison
-            TokenType::EqualEqual => Value::Bool(self.left.evaluate() == self.right.evaluate()),
-            TokenType::BangEqual => Value::Bool(self.left.evaluate() != self.right.evaluate()),
-            TokenType::Greater => Value::Bool(
-                self.left.evaluate().extract_num() > self.right.evaluate().extract_num(),
-            ),
-            TokenType::GreaterEqual => Value::Bool(
-                self.left.evaluate().extract_num() >= self.right.evaluate().extract_num(),
-            ),
-            TokenType::Less => Value::Bool(
-                self.left.evaluate().extract_num() < self.right.evaluate().extract_num(),
-            ),
-            TokenType::LessEqual => Value::Bool(
-                self.left.evaluate().extract_num() <= self.right.evaluate().extract_num(),
-            ),
+            TokenType::EqualEqual => {
+                Ok(Value::Bool(self.left.evaluate()? == self.right.evaluate()?))
+            }
+            TokenType::BangEqual => {
+                Ok(Value::Bool(self.left.evaluate()? != self.right.evaluate()?))
+            }
+            TokenType::Greater => Ok(Value::Bool(left.evaluate()? > right.evaluate()?)),
+            TokenType::GreaterEqual => Ok(Value::Bool(left.evaluate()? >= right.evaluate()?)),
+            TokenType::Less => Ok(Value::Bool(left.evaluate()? < right.evaluate()?)),
+            TokenType::LessEqual => Ok(Value::Bool(left.evaluate()? <= right.evaluate()?)),
             _ => {
                 panic!("Invalid binary operator");
             }
@@ -55,39 +44,40 @@ impl Expression for Binary {
         format!(
             "({} {} {})",
             self.left.node_to_string(),
-            self.operator.value.extract_str(),
+            self.operator.value,
             self.right.node_to_string()
         )
     }
 }
 
 impl Expression for Unary {
-    fn evaluate(&self) -> Value {
-        match self.operator.token_type {
-            TokenType::Minus => match self.expression.evaluate() {
-                Value::Num(num) => Value::Num(-num),
-                _ => {
-                    panic!("Invalid operand for -");
-                }
-            },
-            TokenType::Bang => Value::Bool(!self.expression.evaluate().extract_bool()),
-            _ => {
-                panic!("Invalid unary operator");
-            }
+    fn evaluate(&self) -> Result<Value> {
+        let Unary {
+            operator: Token { token_type, .. },
+            expression,
+        } = self;
+
+        match token_type {
+            TokenType::Minus => Ok((-(expression.evaluate()?))?),
+            TokenType::Bang => Ok(!expression.evaluate()?),
+            _ => Err(Error::new(
+                std::io::ErrorKind::Other,
+                "Invalid unary operator",
+            )),
         }
     }
 
     fn node_to_string(&self) -> String {
         format!(
             "({}{})",
-            self.operator.value.extract_str(),
+            self.operator.value,
             self.expression.node_to_string()
         )
     }
 }
 
 impl Expression for Grouping {
-    fn evaluate(&self) -> Value {
+    fn evaluate(&self) -> Result<Value> {
         self.expression.evaluate()
     }
 
@@ -97,8 +87,8 @@ impl Expression for Grouping {
 }
 
 impl Expression for Literal {
-    fn evaluate(&self) -> Value {
-        self.value.clone()
+    fn evaluate(&self) -> Result<Value> {
+        Ok(self.value.clone())
     }
 
     fn node_to_string(&self) -> String {
@@ -117,7 +107,7 @@ pub fn interpret(source: &[u8]) -> Result<()> {
 
     // print!("{:#?}", expr);
 
-    let value = expr.evaluate();
+    let value = expr.evaluate()?;
 
     println!("{}", value);
 
@@ -133,21 +123,21 @@ mod tests {
     fn test_interpret_arithmetic() {
         let source = b"1 + 2 * 3 - 4 / 2";
         let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate(), Value::Num(5.0));
+        assert_eq!(expr.evaluate().unwrap(), Value::Num(5.0));
     }
 
     #[test]
     fn test_interpret_unary() {
         let source = b"-1 + -2";
         let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate(), Value::Num(-3.0));
+        assert_eq!(expr.evaluate().unwrap(), Value::Num(-3.0));
     }
 
     #[test]
     fn test_interpret_grouping() {
         let source = b"(1 + 2) * 3";
         let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate(), Value::Num(9.0));
+        assert_eq!(expr.evaluate().unwrap(), Value::Num(9.0));
     }
 
     #[test]
@@ -155,14 +145,6 @@ mod tests {
     fn test_interpret_invalid_binary() {
         let source = b"1 + true";
         let expr = parse(source).unwrap();
-        expr.evaluate();
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_interpret_invalid_unary() {
-        let source = b"!1";
-        let expr = parse(source).unwrap();
-        expr.evaluate();
+        expr.evaluate().unwrap();
     }
 }
