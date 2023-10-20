@@ -2,7 +2,7 @@ use std::io::Result;
 
 use crate::{
     lexer::{TokenType, Value},
-    parser::{Evaluable, self},
+    parser::{self, Evaluable},
 };
 
 fn evaluate(expr: Box<dyn Evaluable>) -> Value {
@@ -101,7 +101,7 @@ pub fn interpret(source: &[u8]) -> Result<()> {
 
     // print!("{:?}", expr);
 
-    let value = evaluate(expr);
+    let value = expr.evaluate();
 
     println!(" => {:?}", value);
 
