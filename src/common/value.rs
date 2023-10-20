@@ -6,7 +6,6 @@ use std::{
 
 #[derive(PartialEq, Clone, PartialOrd)]
 pub enum Value {
-    None,
     Null,
     Num(f64),
     Str(String),
@@ -16,7 +15,6 @@ pub enum Value {
 impl Value {
     pub fn is_truthy(&self) -> bool {
         match self {
-            Value::None => false,
             Value::Null => false,
             Value::Num(num) => *num != 0.0,
             Value::Str(str) => !str.is_empty(),
@@ -28,7 +26,6 @@ impl Value {
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::None => write!(f, "None"),
             Value::Null => write!(f, "Null"),
             Value::Num(num) => write!(f, "{}", num),
             Value::Str(str) => write!(f, "\"{}\"", str),
@@ -40,7 +37,6 @@ impl fmt::Debug for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::None => write!(f, "None"),
             Value::Null => write!(f, "Null"),
             Value::Num(num) => write!(f, "{}", num),
             Value::Str(str) => write!(f, "{}", str),

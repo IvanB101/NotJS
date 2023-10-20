@@ -2,8 +2,6 @@ use super::value::Value;
 use phf::phf_map;
 
 pub const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
-    "and" => TokenType::And,
-    "or" => TokenType::Or,
     "function" => TokenType::Function,
     "class" => TokenType::Class,
     "interface" => TokenType::Interface,
