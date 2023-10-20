@@ -239,3 +239,55 @@ pub fn parse(source: &[u8]) -> Result<Box<dyn Expression>> {
 
     parser.parse()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_literal() {
+        let source = b"123";
+        let expr = parse(source).unwrap();
+
+        assert_eq!(expr.node_to_string(), "123");
+    }
+
+    #[test]
+    fn test_parse_unary() {
+        let source = b"-123";
+        let expr = parse(source).unwrap();
+
+        assert_eq!(expr.node_to_string(), "(-123)");
+    }
+
+    #[test]
+    fn test_parse_grouping() {
+        let source = b"(123)";
+        let expr = parse(source).unwrap();
+
+        assert_eq!(expr.node_to_string(), "(123)");
+    }
+
+    #[test]
+    fn test_parse_binary() {
+        let source = b"1 + 2";
+        let expr = parse(source).unwrap();
+
+        assert_eq!(expr.node_to_string(), "(1 + 2)");
+    }
+
+    #[test]
+    fn test_parse_precedence() {
+        let source = b"1 + 2 * 3";
+        let expr = parse(source).unwrap();
+
+        assert_eq!(expr.node_to_string(), "(1 + (2 * 3))");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_parse_error() {
+        let source = b"1 +";
+        let result = parse(source);
+    }
+}
