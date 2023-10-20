@@ -52,7 +52,9 @@ fn debug_file(path: &str) -> Result<()> {
 
     let expr = parser::parse(&buffer)?;
 
-    println!("{:#?}", expr);
+    print!("{:#?} => ", expr);
+
+    interpret(&buffer)?;
 
     Ok(())
 }
