@@ -53,7 +53,7 @@ impl Expression for Binary {
 
     fn node_to_string(&self) -> String {
         format!(
-            "{} {} {}",
+            "({} {} {})",
             self.left.node_to_string(),
             self.operator.value.extract_str(),
             self.right.node_to_string()
@@ -79,7 +79,7 @@ impl Expression for Unary {
 
     fn node_to_string(&self) -> String {
         format!(
-            "({} {})",
+            "({}{})",
             self.operator.value.extract_str(),
             self.expression.node_to_string()
         )
@@ -115,11 +115,11 @@ impl Expression for Literal {
 pub fn interpret(source: &[u8]) -> Result<()> {
     let expr = parser::parse(source)?;
 
-    print!("{:?}", expr);
+    // print!("{:#?}", expr);
 
     let value = expr.evaluate();
 
-    println!(" => {:?}", value);
+    println!("{}", value);
 
     Ok(())
 }
