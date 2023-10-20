@@ -143,7 +143,7 @@ impl<'a> Iterator for Scanner<'a> {
                 b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(identifier(self, *chr)),
                 // ### Tokens without value
                 // ## Single character tokens
-                // # Operators
+                // # Arithmetic operators
                 b'+' => Some(Token::new(
                     TokenType::Plus,
                     Value::Str("+".to_string()),
@@ -159,8 +159,8 @@ impl<'a> Iterator for Scanner<'a> {
                     Value::Str("*".to_string()),
                     self.line,
                 )),
-                // Comments check
                 b'/' => match self.source_iter.peek() {
+                    // Comments check
                     Some(b'/') => {
                         self.source_iter.next();
                         skip_single_line_comment(self);
@@ -177,6 +177,17 @@ impl<'a> Iterator for Scanner<'a> {
                         self.line,
                     )),
                 },
+                // # Logical operators
+                b'&' => Some(Token::new(
+                    TokenType::And,
+                    Value::Str("&".to_string()),
+                    self.line,
+                )),
+                b'|' => Some(Token::new(
+                    TokenType::Or,
+                    Value::Str("|".to_string()),
+                    self.line,
+                )),
                 // ## Punctuation
                 b'(' => Some(Token::new(
                     TokenType::LeftParentheses,
@@ -290,7 +301,11 @@ impl<'a> Iterator for Scanner<'a> {
                 }
                 _ => {
                     println!("Error: Unexpected character: {}", *chr as char);
-                    Some(Token::new(TokenType::Error, Value::None, self.line))
+                    Some(Token::new(
+                        TokenType::Error,
+                        Value::Str((*chr as char).to_string()),
+                        self.line,
+                    ))
                 }
             },
             None => None,
@@ -370,6 +385,20 @@ mod tests {
     }
 
     #[test]
+    fn test_lexing_logical_operators() {
+        let source = b"& |";
+        let mut lexer = Scanner::new(source);
+        let expected_tokens = vec![
+            Token::new(TokenType::And, Value::Str("&".to_string()), 1),
+            Token::new(TokenType::Or, Value::Str("|".to_string()), 1),
+        ];
+        for expected_token in expected_tokens {
+            assert_eq!(lexer.next(), Some(expected_token));
+        }
+        assert_eq!(lexer.next(), None);
+    }
+
+    #[test]
     fn test_lexing_strings() {
         let source = b"\"Hello, world!\" 'Hello, world!'";
         let mut lexer = Scanner::new(source);
@@ -393,11 +422,9 @@ mod tests {
 
     #[test]
     fn test_lexing_keywords() {
-        let source = b"and or function class interface implements if else bool true false null while for return break continue print self var const";
+        let source = b"function class interface implements if else bool true false null while for return break continue print self var const";
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
-            Token::new(TokenType::And, Value::Str(String::from("and")), 1),
-            Token::new(TokenType::Or, Value::Str(String::from("or")), 1),
             Token::new(TokenType::Function, Value::Str(String::from("function")), 1),
             Token::new(TokenType::Class, Value::Str(String::from("class")), 1),
             Token::new(
@@ -505,7 +532,7 @@ mod tests {
         }
         assert_eq!(
             lexer.next(),
-            Some(Token::new(TokenType::Error, Value::None, 1))
+            Some(Token::new(TokenType::Error, Value::Str("^".to_string()), 1))
         );
         assert_eq!(lexer.next(), None);
     }

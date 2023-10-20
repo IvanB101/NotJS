@@ -97,7 +97,6 @@ impl Expression for Literal {
             Value::Str(ref string) => "\"".to_string() + string + "\"",
             Value::Bool(boolean) => boolean.to_string(),
             Value::Null => "null".to_string(),
-            Value::None => "none".to_string(),
         }
     }
 }
@@ -138,6 +137,88 @@ mod tests {
         let source = b"(1 + 2) * 3";
         let expr = parse(source).unwrap();
         assert_eq!(expr.evaluate().unwrap(), Value::Num(9.0));
+    }
+
+    #[test]
+    fn test_interpret_comparison() {
+        let source = b"1 > 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"1 >= 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"1 < 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+
+        let source = b"1 <= 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+
+        let source = b"1 == 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"1 != 2";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn test_interpret_boolean() {
+        let source = b"true == true";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+
+        let source = b"true != true";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"false == false";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+
+        let source = b"false != false";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"true == false";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+
+        let source = b"true != false";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn test_interpret_string() {
+        let source = b"\"hello\" + \" world\"";
+        let expr = parse(source).unwrap();
+        assert_eq!(
+            expr.evaluate().unwrap(),
+            Value::Str("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_interpret_null() {
+        let source = b"null";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn test_interpret_coerce_string() {
+        let source = b"\"hello\" + 1";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Str("hello1".to_string()));
+
+        let source = b"!!\"hello\"";
+        let expr = parse(source).unwrap();
+        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
     }
 
     #[test]

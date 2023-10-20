@@ -31,13 +31,6 @@ unary          → ( "!" | "-" ) unary | primary ;
 primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 */
 
-/*
-"Binary   : Expr left, Token operator, Expr right",
-"Grouping : Expr expression",
-"Literal  : Object value",
-"Unary    : Token operator, Expr right"
-*/
-
 struct Parser<'a> {
     scanner: Peekable<Scanner<'a>>,
 }
