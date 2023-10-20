@@ -115,11 +115,11 @@ impl Expression for Literal {
 pub fn interpret(source: &[u8]) -> Result<()> {
     let expr = parser::parse(source)?;
 
-    print!("{:?}", expr);
+    // print!("{:#?}", expr);
 
     let value = expr.evaluate();
 
-    println!(" => {:?}", value);
+    println!("{}", value);
 
     Ok(())
 }
