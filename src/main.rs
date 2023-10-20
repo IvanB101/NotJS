@@ -6,6 +6,7 @@ use std::{
 
 use crate::interpreter::interpret;
 
+mod common;
 mod interpreter;
 mod lexer;
 mod parser;

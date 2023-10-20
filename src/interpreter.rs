@@ -1,13 +1,13 @@
 use std::io::Result;
 
 use crate::{
-    lexer::{TokenType, Value},
-    parser::{self, Binary, Grouping, Literal, Unary},
+    common::{
+        expressions::{Binary, Expression, Grouping, Literal, Unary},
+        token::TokenType,
+        value::Value,
+    },
+    parser,
 };
-
-pub trait Expression {
-    fn evaluate(&self) -> Value;
-}
 
 impl Expression for Binary {
     fn evaluate(&self) -> Value {
@@ -50,6 +50,15 @@ impl Expression for Binary {
             }
         }
     }
+
+    fn node_to_string(&self) -> String {
+        format!(
+            "{} {} {}",
+            self.left.node_to_string(),
+            self.operator.value.extract_str(),
+            self.right.node_to_string()
+        )
+    }
 }
 
 impl Expression for Unary {
@@ -67,17 +76,39 @@ impl Expression for Unary {
             }
         }
     }
+
+    fn node_to_string(&self) -> String {
+        format!(
+            "({} {})",
+            self.operator.value.extract_str(),
+            self.expression.node_to_string()
+        )
+    }
 }
 
 impl Expression for Grouping {
     fn evaluate(&self) -> Value {
         self.expression.evaluate()
     }
+
+    fn node_to_string(&self) -> String {
+        format!("({})", self.expression.node_to_string())
+    }
 }
 
 impl Expression for Literal {
     fn evaluate(&self) -> Value {
         self.value.clone()
+    }
+
+    fn node_to_string(&self) -> String {
+        match self.value {
+            Value::Num(num) => num.to_string(),
+            Value::Str(ref string) => "\"".to_string() + string + "\"",
+            Value::Bool(boolean) => boolean.to_string(),
+            Value::Null => "null".to_string(),
+            Value::None => "none".to_string(),
+        }
     }
 }
 

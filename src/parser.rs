@@ -1,124 +1,12 @@
-use std::{fmt, io::Result, iter::Peekable};
+use std::{io::Result, iter::Peekable};
 
 use crate::{
-    interpreter::Expression,
-    lexer::{Scanner, Token, TokenType, Value},
+    common::{
+        expressions::{Binary, Expression, Grouping, Literal, Unary},
+        token::{Token, TokenType},
+    },
+    lexer::Scanner,
 };
-
-pub struct Binary {
-    pub left: Box<dyn Expression>,
-    pub operator: Token,
-    pub right: Box<dyn Expression>,
-}
-
-pub struct Unary {
-    pub operator: Token,
-    pub expression: Box<dyn Expression>,
-}
-
-pub struct Grouping {
-    pub expression: Box<dyn Expression>,
-}
-
-pub struct Literal {
-    pub value: Value,
-}
-
-// impl fmt::Debug for Expr {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             // Binary
-//             Expr {
-//                 left: Some(left),
-//                 operator: Some(token),
-//                 right: Some(right),
-//                 literal: None,
-//             } => {
-//                 // write!(f, "(")?;
-//                 write!(f, "{:?} ", left)?;
-//                 write!(f, "{} ", lexeme(token.token_type))?;
-//                 write!(f, "{:?}", right)
-//             }
-//             // Unary
-//             Expr {
-//                 left: None,
-//                 operator: Some(token),
-//                 right: Some(right),
-//                 literal: None,
-//             } => {
-//                 // write!(f, "(")?;
-//                 write!(f, "{} ", lexeme(token.token_type))?;
-//                 write!(f, "{:?}", right)
-//             }
-//             // Literal
-//             Expr {
-//                 left: None,
-//                 operator: None,
-//                 right: None,
-//                 literal: Some(literal),
-//             } => match literal {
-//                 Value::Num(n) => write!(f, "{}", n),
-//                 Value::Str(s) => write!(f, "{}", s),
-//                 Value::Bool(b) => write!(f, "{}", b),
-//                 Value::Null => write!(f, "null"),
-//                 Value::None => fmt::Result::Ok(()),
-//             },
-//             // Grouping
-//             Expr {
-//                 left: Some(left),
-//                 operator: None,
-//                 right: None,
-//                 literal: None,
-//             } => {
-//                 write!(f, "(")?;
-//                 write!(f, "{:?})", left)
-//             }
-//             _ => fmt::Result::Ok(()),
-//         }
-//     }
-// }
-
-impl fmt::Debug for Binary {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(")?;
-        write!(f, "{:?} ", self.left)?;
-        write!(f, "{} ", self.operator.value.extract_str())?;
-        write!(f, "{:?})", self.right)
-    }
-}
-
-impl fmt::Debug for Unary {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(")?;
-        write!(f, "{} ", self.operator.value.extract_str())?;
-        write!(f, "{:?})", self.expression)
-    }
-}
-
-impl fmt::Debug for Grouping {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(")?;
-        write!(f, "{:?})", self.expression)
-    }
-}
-
-impl fmt::Debug for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.value {
-            Value::Num(n) => write!(f, "{}", n),
-            Value::Str(ref s) => write!(f, "{}", s),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Null => write!(f, "null"),
-            Value::None => fmt::Result::Ok(()),
-        }
-    }
-}
-
-impl fmt::Debug for dyn Expression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 
 fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Expression>> {
     match token {
@@ -308,6 +196,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    #[allow(dead_code)]
     fn synchronize(&mut self) {
         while let Some(token) = self.scanner.next() {
             match token.token_type {
