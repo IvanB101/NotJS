@@ -1,258 +1,14 @@
-use std::{fmt, io::Result, iter::Peekable};
+use std::{io::Result, iter::Peekable};
 
-use crate::lexer::{Scanner, Token, TokenType, Value};
+use crate::{
+    common::{
+        expressions::{Binary, Expression, Grouping, Literal, Unary},
+        token::{Token, TokenType},
+    },
+    lexer::Scanner,
+};
 
-fn lexeme(token_type: TokenType) -> &'static str {
-    match token_type {
-        TokenType::LeftParentheses => "(",
-        TokenType::RightParentheses => ")",
-        TokenType::LeftBrace => "{",
-        TokenType::RightBrace => "}",
-        TokenType::LeftBracket => "[",
-        TokenType::RightBracket => "]",
-        TokenType::Interface => "interface",
-        TokenType::Implements => "implements",
-        TokenType::Bool => "boolean",
-        TokenType::Break => "break",
-        TokenType::Continue => "continue",
-        TokenType::Const => "const",
-        TokenType::SelfTok => "self",
-        TokenType::Comma => ",",
-        TokenType::Dot => ".",
-        TokenType::Minus => "-",
-        TokenType::Plus => "+",
-        TokenType::Semicolon => ";",
-        TokenType::Slash => "/",
-        TokenType::Star => "*",
-        TokenType::Bang => "!",
-        TokenType::BangEqual => "!=",
-        TokenType::Equal => "=",
-        TokenType::EqualEqual => "==",
-        TokenType::Greater => ">",
-        TokenType::GreaterEqual => ">=",
-        TokenType::Less => "<",
-        TokenType::LessEqual => "<=",
-        TokenType::Identifier => "identifier",
-        TokenType::String => "string",
-        TokenType::Number => "number",
-        TokenType::And => "and",
-        TokenType::Class => "class",
-        TokenType::Else => "else",
-        TokenType::False => "false",
-        TokenType::Function => "function",
-        TokenType::For => "for",
-        TokenType::If => "if",
-        TokenType::Null => "null",
-        TokenType::Or => "or",
-        TokenType::Print => "print",
-        TokenType::Return => "return",
-        TokenType::True => "true",
-        TokenType::Var => "var",
-        TokenType::While => "while",
-        TokenType::Error => "error",
-    }
-}
-
-// #[derive(PartialEq, Clone)]
-// pub struct Expr {
-//     pub left: Option<Box<Expr>>,
-//     pub operator: Option<Token>,
-//     pub right: Option<Box<Expr>>,
-//     pub literal: Option<Value>,
-// }
-
-// pub enum Expr {
-//     Binary {
-//         left: Box<Expr>,
-//         operator: Token,
-//         right: Box<Expr>,
-//     },
-//     Unary {
-//         operator: Token,
-//         expression: Box<Expr>,
-//     },
-//     Grouping {
-//         expression: Box<Expr>,
-//     },
-//     Literal {
-//         value: Value,
-//     },
-// }
-
-pub struct Binary {
-    pub left: Box<dyn Evaluable>,
-    pub operator: Token,
-    pub right: Box<dyn Evaluable>,
-}
-
-pub struct Unary {
-    pub operator: Token,
-    pub expression: Box<dyn Evaluable>,
-}
-
-pub struct Grouping {
-    pub expression: Box<dyn Evaluable>,
-}
-
-pub struct Literal {
-    pub value: Value,
-}
-
-pub trait Evaluable {
-    fn evaluate(&self) -> Value;
-}
-
-impl Evaluable for Binary {
-    fn evaluate(&self) -> Value {
-        if let Binary {
-            left,
-            operator,
-            right,
-        } = self
-        {
-            match operator.token_type {
-                // Arithmetic
-                TokenType::Plus => match (left.evaluate(), right.evaluate()) {
-                    (Value::Num(left), Value::Num(right)) => Value::Num(left + right),
-                    (Value::Str(left), Value::Str(right)) => {
-                        Value::Str(format!("{}{}", left, right))
-                    }
-                    _ => {
-                        panic!("Invalid operands for +");
-                    }
-                },
-                TokenType::Minus => {
-                    Value::Num(left.evaluate().extract_num() - right.evaluate().extract_num())
-                }
-                TokenType::Star => {
-                    Value::Num(left.evaluate().extract_num() * right.evaluate().extract_num())
-                }
-                TokenType::Slash => {
-                    Value::Num(left.evaluate().extract_num() / right.evaluate().extract_num())
-                }
-
-                // Comparison
-                TokenType::EqualEqual => Value::Bool(left.evaluate() == right.evaluate()),
-                TokenType::BangEqual => Value::Bool(left.evaluate() != right.evaluate()),
-                TokenType::Greater => {
-                    Value::Bool(left.evaluate().extract_num() > right.evaluate().extract_num())
-                }
-                TokenType::GreaterEqual => {
-                    Value::Bool(left.evaluate().extract_num() >= right.evaluate().extract_num())
-                }
-                TokenType::Less => {
-                    Value::Bool(left.evaluate().extract_num() < right.evaluate().extract_num())
-                }
-                TokenType::LessEqual => {
-                    Value::Bool(left.evaluate().extract_num() <= right.evaluate().extract_num())
-                }
-
-                _ => {
-                    panic!("Invalid binary operator");
-                }
-            }
-        } else {
-            panic!("Invalid binary expression");
-        }
-    }
-}
-
-impl Evaluable for Unary {
-    fn evaluate(&self) -> Value {
-        if let Unary {
-            operator,
-            expression,
-        } = self
-        {
-            match operator.token_type {
-                TokenType::Minus => match expression.evaluate() {
-                    Value::Num(num) => Value::Num(-num),
-                    _ => {
-                        panic!("Invalid operand for -");
-                    }
-                },
-                TokenType::Bang => Value::Bool(!expression.evaluate().extract_bool()),
-                _ => {
-                    panic!("Invalid unary operator");
-                }
-            }
-        } else {
-            panic!("Invalid unary expression");
-        }
-    }
-}
-
-impl Evaluable for Grouping {
-    fn evaluate(&self) -> Value {
-        if let Grouping { expression } = self {
-            expression.evaluate()
-        } else {
-            panic!("Invalid grouping expression");
-        }
-    }
-}
-
-impl Evaluable for Literal {
-    fn evaluate(&self) -> Value {
-        self.value.clone()
-    }
-}
-
-// impl fmt::Debug for Expr {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             // Binary
-//             Expr {
-//                 left: Some(left),
-//                 operator: Some(token),
-//                 right: Some(right),
-//                 literal: None,
-//             } => {
-//                 // write!(f, "(")?;
-//                 write!(f, "{:?} ", left)?;
-//                 write!(f, "{} ", lexeme(token.token_type))?;
-//                 write!(f, "{:?}", right)
-//             }
-//             // Unary
-//             Expr {
-//                 left: None,
-//                 operator: Some(token),
-//                 right: Some(right),
-//                 literal: None,
-//             } => {
-//                 // write!(f, "(")?;
-//                 write!(f, "{} ", lexeme(token.token_type))?;
-//                 write!(f, "{:?}", right)
-//             }
-//             // Literal
-//             Expr {
-//                 left: None,
-//                 operator: None,
-//                 right: None,
-//                 literal: Some(literal),
-//             } => match literal {
-//                 Value::Num(n) => write!(f, "{}", n),
-//                 Value::Str(s) => write!(f, "{}", s),
-//                 Value::Bool(b) => write!(f, "{}", b),
-//                 Value::Null => write!(f, "null"),
-//                 Value::None => fmt::Result::Ok(()),
-//             },
-//             // Grouping
-//             Expr {
-//                 left: Some(left),
-//                 operator: None,
-//                 right: None,
-//                 literal: None,
-//             } => {
-//                 write!(f, "(")?;
-//                 write!(f, "{:?})", left)
-//             }
-//             _ => fmt::Result::Ok(()),
-//         }
-//     }
-// }
-
-fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Evaluable>> {
+fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Expression>> {
     match token {
         Some(token) => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -312,11 +68,11 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Box<dyn Evaluable> {
+    fn expression(&mut self) -> Box<dyn Expression> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Box<dyn Evaluable> {
+    fn equality(&mut self) -> Box<dyn Expression> {
         let mut expr = self.comparison();
 
         while let Some(Token {
@@ -334,7 +90,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn comparison(&mut self) -> Box<dyn Evaluable> {
+    fn comparison(&mut self) -> Box<dyn Expression> {
         let mut expr = self.term();
 
         while let Some(Token {
@@ -353,7 +109,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn term(&mut self) -> Box<dyn Evaluable> {
+    fn term(&mut self) -> Box<dyn Expression> {
         let mut expr = self.factor();
 
         while let Some(Token {
@@ -371,7 +127,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn factor(&mut self) -> Box<dyn Evaluable> {
+    fn factor(&mut self) -> Box<dyn Expression> {
         let mut expr = self.unary();
 
         while let Some(Token {
@@ -389,7 +145,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn unary(&mut self) -> Box<dyn Evaluable> {
+    fn unary(&mut self) -> Box<dyn Expression> {
         if let Some(Token {
             token_type: TokenType::Bang | TokenType::Minus,
             ..
@@ -404,7 +160,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn primary(&mut self) -> Box<dyn Evaluable> {
+    fn primary(&mut self) -> Box<dyn Expression> {
         if let Some(Token {
             token_type,
             value,
@@ -440,6 +196,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    #[allow(dead_code)]
     fn synchronize(&mut self) {
         while let Some(token) = self.scanner.next() {
             match token.token_type {
@@ -465,7 +222,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Box<dyn Evaluable>> {
+    fn parse(&mut self) -> Result<Box<dyn Expression>> {
         let expr = self.expression();
 
         match self.scanner.next() {
@@ -477,7 +234,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Box<dyn Evaluable>> {
+pub fn parse(source: &[u8]) -> Result<Box<dyn Expression>> {
     let mut parser = Parser::new(source);
 
     parser.parse()

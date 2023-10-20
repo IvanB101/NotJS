@@ -1,168 +1,12 @@
-#![allow(dead_code)]
-use core::fmt;
-use phf::phf_map;
-use std::{iter::Peekable, slice::Iter};
-
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum TokenType {
-    LeftParentheses,
-    RightParentheses,
-    LeftBrace,
-    RightBrace,
-    LeftBracket,
-    RightBracket,
-    Comma,
-    Dot,
-    Minus,
-    Plus,
-    Semicolon,
-    Slash,
-    Star,
-    // One or two character tokens.
-    Bang,
-    BangEqual,
-    Equal,
-    EqualEqual,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
-    // Literals.
-    Number,
-    String,
-    Identifier,
-    // Keywords.
-    And,
-    Or,
-    Function,
-    Class,
-    Interface,
-    Implements,
-    If,
-    Else,
-    Bool,
-    True,
-    False,
-    Null,
-    While,
-    For,
-    Return,
-    Break,
-    Continue,
-    Print,
-    SelfTok,
-    Var,
-    Const,
-    // Special tokens
-    Error,
-}
-
-const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
-    "and" => TokenType::And,
-    "or" => TokenType::Or,
-    "function" => TokenType::Function,
-    "class" => TokenType::Class,
-    "interface" => TokenType::Interface,
-    "implements" => TokenType::Implements,
-    "if" => TokenType::If,
-    "else" => TokenType::Else,
-    "bool" => TokenType::Bool,
-    "true" => TokenType::True,
-    "false" => TokenType::False,
-    "null" => TokenType::Null,
-    "while" => TokenType::While,
-    "for" => TokenType::For,
-    "return" => TokenType::Return,
-    "break" => TokenType::Break,
-    "continue" => TokenType::Continue,
-    "print" => TokenType::Print,
-    "self" => TokenType::SelfTok,
-    "var" => TokenType::Var,
-    "const" => TokenType::Const,
+use crate::common::{
+    token::{Token, TokenType, KEYWORDS},
+    value::Value,
 };
-
-#[derive(PartialEq, Clone)]
-pub enum Value {
-    None,
-    Null,
-    Num(f64),
-    Str(String),
-    Bool(bool),
-}
-
-impl Value {
-    pub fn extract_num(&self) -> f64 {
-        match self {
-            Value::Num(num) => *num,
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
-    pub fn extract_str(&self) -> String {
-        match self {
-            Value::Str(str) => str.clone(),
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
-    pub fn extract_bool(&self) -> bool {
-        match self {
-            Value::Bool(bool) => *bool,
-            _ => panic!("It's Nil, you lost the game"),
-        }
-    }
-
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Value::None => false,
-            Value::Null => false,
-            Value::Num(num) => *num != 0.0,
-            Value::Str(str) => !str.is_empty(),
-            Value::Bool(bool) => *bool,
-        }
-    }
-}
-
-impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Value::None => write!(f, "None"),
-            Value::Null => write!(f, "Null"),
-            Value::Num(num) => write!(f, "{}", num),
-            Value::Str(str) => write!(f, "{}", str),
-            Value::Bool(bool) => write!(f, "{}", bool),
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub struct Token {
-    pub token_type: TokenType,
-    pub value: Value,
-    pub line: u32,
-}
-
-impl Token {
-    // fn new(token_type: TokenType, line: u32) -> Self {
-    //     Token {
-    //         token_type,
-    //         value: Value::None,
-    //         line,
-    //     }
-    // }
-
-    fn new(token_type: TokenType, value: Value, line: u32) -> Self {
-        Token {
-            token_type,
-            value,
-            line,
-        }
-    }
-}
+use std::{iter::Peekable, slice::Iter};
 
 pub struct Scanner<'a> {
     source_iter: Peekable<Iter<'a, u8>>,
-    token: u32,
+    // token: u32,
     line: u32,
 }
 
@@ -170,7 +14,7 @@ impl<'a> Scanner<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Scanner {
             source_iter: source.iter().peekable(), // .peekable() .enumerate()
-            token: 1,
+            // token: 1,
             line: 1,
         }
     }
