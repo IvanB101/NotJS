@@ -2,34 +2,19 @@ use std::{io::Result, iter::Peekable};
 
 use crate::{
     common::{
-        expressions::{Binary, Expression, Grouping, Literal, Unary},
+        expressions::{
+            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Literal,
+            PostfixExpression, PostfixOperator, UnaryExpression,
+        },
+        statements::{
+            BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
+            Statement, VariableDeclaration, WhileStatement,
+        },
         token::{Token, TokenType},
+        value::Value,
     },
     lexer::Scanner,
 };
-
-fn report_error(token: Option<Token>, message: &str) -> Result<Box<dyn Expression>> {
-    match token {
-        Some(token) => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: in {:?} at {}", message, token.token_type, token.line),
-        )),
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: at end", message),
-        )),
-    }
-}
-
-/*
-expression     → equality ;
-equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term           → factor ( ( "-" | "+" ) factor )* ;
-factor         → unary ( ( "/" | "*" ) unary )* ;
-unary          → ( "!" | "-" ) unary | primary ;
-primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
-*/
 
 struct Parser<'a> {
     scanner: Peekable<Scanner<'a>>,
@@ -58,130 +43,542 @@ impl<'a> Parser<'a> {
     }
 }
 
+/*
+program = { statement } ;
+statement = block
+            | variable_declaration
+            | expression_statement
+            | print_statement
+            | if_statement
+            | while_statement
+            | return_statement ;
+
+block = "{" , { statement } , "}" ;
+variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] , ";" ;
+expression_statement = expression , ";" ;
+print_statement = "print" , expression , ";" ;
+if_statement = "if" , "(" , expression , ")" , statement , [ "else" , statement ] ;
+while_statement = "while" , "(" , expression , ")" , statement ;
+return_statement = "return" , [ expression ] , ";" ;
+
+expression = assignment_expression ;
+assignment_expression = conditional_expression , [ assignment_operator , assignment_expression ] ;
+conditional_expression = logical_or_expression , [ "?" , expression , ":" , conditional_expression ] ;
+logical_or_expression = logical_and_expression , { "|" , logical_and_expression } ;
+logical_and_expression = equality_expression , { "&" , equality_expression } ;
+equality_expression = relational_expression , { ( "==" | "!=" ) , relational_expression } ;
+relational_expression = additive_expression , { ( "<" | "<=" | ">" | ">=" ) , additive_expression } ;
+additive_expression = multiplicative_expression , { ( "+" | "-" ) , multiplicative_expression } ;
+multiplicative_expression = unary_expression , { ( "*" | "/" ) , unary_expression } ;
+unary_expression = postfix_expression | ( (  "-" | "!" ) , unary_expression ) ;
+postfix_expression = primary_expression , { "[" , expression , "]" | "." , identifier | "(" , [ argument_list ] , ")" } ;
+primary_expression = identifier | literal | "(" , expression , ")" ;
+argument_list = expression , { "," , expression } ;
+assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
+identifier = letter , { letter | digit | "_" } ;
+literal = NUMBER | STRING | BOOLEAN | NULL ;
+*/
+
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Box<dyn Expression> {
-        self.equality()
-    }
+    fn program(&mut self) -> Result<Vec<Box<dyn Statement>>> {
+        let mut statements = Vec::new();
+        let mut had_error = false;
 
-    fn equality(&mut self) -> Box<dyn Expression> {
-        let mut expr = self.comparison();
-
-        while let Some(Token {
-            token_type: TokenType::BangEqual | TokenType::EqualEqual,
-            ..
-        }) = self.scanner.peek()
-        {
-            expr = Box::new(Binary {
-                left: expr,
-                operator: self.scanner.next().unwrap(),
-                right: self.comparison(),
-            });
-        }
-
-        expr
-    }
-
-    fn comparison(&mut self) -> Box<dyn Expression> {
-        let mut expr = self.term();
-
-        while let Some(Token {
-            token_type:
-                TokenType::Greater | TokenType::GreaterEqual | TokenType::Less | TokenType::LessEqual,
-            ..
-        }) = self.scanner.peek()
-        {
-            expr = Box::new(Binary {
-                left: expr,
-                operator: self.scanner.next().unwrap(),
-                right: self.term(),
-            });
-        }
-
-        expr
-    }
-
-    fn term(&mut self) -> Box<dyn Expression> {
-        let mut expr = self.factor();
-
-        while let Some(Token {
-            token_type: TokenType::Minus | TokenType::Plus,
-            ..
-        }) = self.scanner.peek()
-        {
-            expr = Box::new(Binary {
-                left: expr,
-                operator: self.scanner.next().unwrap(),
-                right: self.factor(),
-            });
-        }
-
-        expr
-    }
-
-    fn factor(&mut self) -> Box<dyn Expression> {
-        let mut expr = self.unary();
-
-        while let Some(Token {
-            token_type: TokenType::Slash | TokenType::Star,
-            ..
-        }) = self.scanner.peek()
-        {
-            expr = Box::new(Binary {
-                left: expr,
-                operator: self.scanner.next().unwrap(),
-                right: self.unary(),
-            });
-        }
-
-        expr
-    }
-
-    fn unary(&mut self) -> Box<dyn Expression> {
-        if let Some(Token {
-            token_type: TokenType::Bang | TokenType::Minus,
-            ..
-        }) = self.scanner.peek()
-        {
-            Box::new(Unary {
-                operator: self.scanner.next().unwrap(),
-                expression: self.unary(),
-            })
-        } else {
-            self.primary()
-        }
-    }
-
-    fn primary(&mut self) -> Box<dyn Expression> {
-        if let Some(Token {
-            token_type,
-            value,
-            line,
-        }) = self.scanner.next()
-        {
-            if let TokenType::Number
-            | TokenType::String
-            | TokenType::True
-            | TokenType::False
-            | TokenType::Null = token_type
-            {
-                Box::new(Literal { value })
-            } else if token_type == TokenType::LeftParentheses {
-                let expr = self.expression();
-                self.consume(TokenType::RightParentheses, "Expected ')' after expression")
-                    .unwrap();
-                Box::new(Grouping { expression: expr })
+        while let Some(_) = self.scanner.peek() {
+            if let Ok(statement) = self.statement() {
+                statements.push(statement);
             } else {
-                panic!(
-                    "Expected expression: in token {:?}",
-                    Token {
-                        token_type,
-                        value,
-                        line
-                    }
-                );
+                had_error = true;
+                self.synchronize();
+            }
+        }
+
+        if had_error {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Parsing failed",
+            ))
+        } else {
+            Ok(statements)
+        }
+    }
+
+    fn statement(&mut self) -> Result<Box<dyn Statement>> {
+        if let Some(token) = self.scanner.next() {
+            match token.token_type {
+                TokenType::LeftBrace => self.block(),
+                TokenType::Let | TokenType::Const => self.variable_declaration(),
+                TokenType::Print => self.print_statement(),
+                TokenType::If => self.if_statement(),
+                TokenType::While => self.while_statement(),
+                TokenType::Return => self.return_statement(),
+                _ => self.expression_statement(),
             }
         } else {
-            panic!("Unexpected end of file");
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unexpected EOF",
+            ))
+        }
+    }
+
+    fn block(&mut self) -> Result<Box<dyn Statement>> {
+        let mut statements = Vec::new();
+
+        while let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::RightBrace {
+                self.scanner.next();
+                break;
+            }
+
+            if let Ok(statement) = self.statement() {
+                statements.push(statement);
+            } else {
+                self.synchronize();
+            }
+        }
+
+        Ok(Box::new(BlockStatement { statements }))
+    }
+
+    fn variable_declaration(&mut self) -> Result<Box<dyn Statement>> {
+        if let Value::Str(name) = self
+            .consume(TokenType::Identifier, "Expected identifier")?
+            .value
+        {
+            let initializer = if let Some(token) = self.scanner.peek() {
+                if token.token_type == TokenType::Equal {
+                    self.scanner.next();
+                    Some(self.expression()?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            self.consume(TokenType::Semicolon, "Expected ';'")?;
+
+            Ok(Box::new(VariableDeclaration { name, initializer }))
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Expected identifier",
+            ))
+        }
+    }
+
+    fn expression_statement(&mut self) -> Result<Box<dyn Statement>> {
+        let expression = self.expression()?;
+
+        self.consume(TokenType::Semicolon, "Expected ';'")?;
+
+        Ok(Box::new(ExpressionStatement { expression }))
+    }
+
+    fn print_statement(&mut self) -> Result<Box<dyn Statement>> {
+        let expression = self.expression()?;
+
+        self.consume(TokenType::Semicolon, "Expected ';'")?;
+
+        Ok(Box::new(PrintStatement { expression }))
+    }
+
+    fn if_statement(&mut self) -> Result<Box<dyn Statement>> {
+        self.consume(TokenType::LeftParentheses, "Expected '('")?;
+
+        let condition = self.expression()?;
+
+        self.consume(TokenType::RightParentheses, "Expected ')'")?;
+
+        let then_branch = self.statement()?;
+
+        let else_branch = if let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::Else {
+                self.scanner.next();
+                Some(self.statement()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Box::new(IfStatement {
+            condition,
+            then_branch,
+            else_branch,
+        }))
+    }
+
+    fn while_statement(&mut self) -> Result<Box<dyn Statement>> {
+        self.consume(TokenType::LeftParentheses, "Expected '('")?;
+
+        let condition = self.expression()?;
+
+        self.consume(TokenType::RightParentheses, "Expected ')'")?;
+
+        let body = self.statement()?;
+
+        Ok(Box::new(WhileStatement { condition, body }))
+    }
+
+    fn return_statement(&mut self) -> Result<Box<dyn Statement>> {
+        let value = if let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::Semicolon {
+                None
+            } else {
+                Some(self.expression()?)
+            }
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "Expected ';'")?;
+
+        Ok(Box::new(ReturnStatement { value }))
+    }
+
+    fn expression(&mut self) -> Result<Box<dyn Expression>> {
+        self.assignment_expression()
+    }
+
+    fn assignment_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.conditional_expression()?;
+
+        match self.scanner.peek() {
+            Some(token) => match token.token_type {
+                TokenType::Equal
+                | TokenType::PlusEqual
+                | TokenType::MinusEqual
+                | TokenType::StarEqual
+                | TokenType::SlashEqual => {
+                    self.scanner.next();
+
+                    let value = self.assignment_expression()?;
+
+                    expression = Box::new(AssignmentExpression {
+                        name: expression.node_to_string(),
+                        operator: token.token_type,
+                        value,
+                    });
+                }
+                _ => {}
+            },
+            None => {}
+        }
+
+        Ok(expression)
+    }
+
+    fn conditional_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.logical_or_expression()?;
+
+        if let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::QuestionMark {
+                self.scanner.next();
+
+                let then_branch = self.expression()?;
+
+                self.consume(TokenType::Colon, "Expected ':'")?;
+
+                let else_branch = self.conditional_expression()?;
+
+                expression = Box::new(ConditionalExpression {
+                    condition: expression,
+                    then_branch,
+                    else_branch,
+                });
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn logical_or_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.logical_and_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::Or {
+                self.scanner.next();
+
+                let right = self.logical_and_expression()?;
+
+                expression = Box::new(BinaryExpression {
+                    left: expression,
+                    operator: token.clone(),
+                    right,
+                });
+            } else {
+                break;
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn logical_and_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.equality_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            if token.token_type == TokenType::And {
+                self.scanner.next();
+
+                let right = self.equality_expression()?;
+
+                expression = Box::new(BinaryExpression {
+                    left: expression,
+                    operator: token.clone(),
+                    right,
+                });
+            } else {
+                break;
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn equality_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.relational_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::EqualEqual | TokenType::BangEqual => {
+                    self.scanner.next();
+
+                    let right = self.relational_expression()?;
+
+                    expression = Box::new(BinaryExpression {
+                        left: expression,
+                        operator: token.clone(),
+                        right,
+                    });
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn relational_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.additive_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::Less
+                | TokenType::LessEqual
+                | TokenType::Greater
+                | TokenType::GreaterEqual => {
+                    self.scanner.next();
+
+                    let right = self.additive_expression()?;
+
+                    expression = Box::new(BinaryExpression {
+                        left: expression,
+                        operator: token.clone(),
+                        right,
+                    });
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn additive_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.multiplicative_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::Plus | TokenType::Minus => {
+                    self.scanner.next();
+
+                    let right = self.multiplicative_expression()?;
+
+                    expression = Box::new(BinaryExpression {
+                        left: expression,
+                        operator: token.clone(),
+                        right,
+                    });
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn multiplicative_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.unary_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::Star | TokenType::Slash => {
+                    self.scanner.next();
+
+                    let right = self.unary_expression()?;
+
+                    expression = Box::new(BinaryExpression {
+                        left: expression,
+                        operator: token.clone(),
+                        right,
+                    });
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn unary_expression(&mut self) -> Result<Box<dyn Expression>> {
+        if let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::Minus | TokenType::Bang => {
+                    self.scanner.next();
+
+                    let right = self.unary_expression()?;
+
+                    Ok(Box::new(UnaryExpression {
+                        operator: token.clone(),
+                        right,
+                    }))
+                }
+                _ => self.postfix_expression(),
+            }
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unexpected EOF",
+            ))
+        }
+    }
+
+    fn postfix_expression(&mut self) -> Result<Box<dyn Expression>> {
+        let mut expression = self.primary_expression()?;
+
+        while let Some(token) = self.scanner.peek() {
+            match token.token_type {
+                TokenType::LeftBracket => {
+                    self.scanner.next();
+
+                    let index = self.expression()?;
+
+                    self.consume(TokenType::RightBracket, "Expected ']'")?;
+
+                    expression = Box::new(PostfixExpression {
+                        left: expression,
+                        operator: PostfixOperator::Index(index),
+                    });
+                }
+                TokenType::Dot => {
+                    self.scanner.next();
+
+                    if let Value::Str(name) = self
+                        .consume(TokenType::Identifier, "Expected identifier")?
+                        .value
+                    {
+                        expression = Box::new(PostfixExpression {
+                            left: expression,
+                            operator: PostfixOperator::Dot(name),
+                        });
+                    } else {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Expected identifier",
+                        ));
+                    }
+                }
+                TokenType::LeftParentheses => {
+                    self.scanner.next();
+
+                    let arguments = if let Some(token) = self.scanner.peek() {
+                        if token.token_type == TokenType::RightParentheses {
+                            self.scanner.next();
+                            None
+                        } else {
+                            let mut arguments = Vec::new();
+
+                            loop {
+                                arguments.push(self.expression()?);
+
+                                if let Some(token) = self.scanner.peek() {
+                                    if token.token_type == TokenType::RightParentheses {
+                                        self.scanner.next();
+                                        break;
+                                    } else if token.token_type == TokenType::Comma {
+                                        self.scanner.next();
+                                    } else {
+                                        return Err(std::io::Error::new(
+                                            std::io::ErrorKind::InvalidData,
+                                            "Expected ',' or ')'",
+                                        ));
+                                    }
+                                } else {
+                                    return Err(std::io::Error::new(
+                                        std::io::ErrorKind::InvalidData,
+                                        "Unexpected EOF",
+                                    ));
+                                }
+                            }
+
+                            Some(arguments)
+                        }
+                    } else {
+                        None
+                    };
+
+                    self.consume(TokenType::RightParentheses, "Expected ')'")?;
+
+                    expression = Box::new(PostfixExpression {
+                        left: expression,
+                        operator: PostfixOperator::Call(arguments.unwrap_or(Vec::new())),
+                    });
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn primary_expression(&mut self) -> Result<Box<dyn Expression>> {
+        if let Some(token) = self.scanner.next() {
+            match token.token_type {
+                TokenType::Identifier => Ok(Box::new(Literal { value: token.value })),
+                TokenType::Number | TokenType::String | TokenType::True | TokenType::False => {
+                    Ok(Box::new(Literal { value: token.value }))
+                }
+                TokenType::LeftParentheses => {
+                    let expression = self.expression()?;
+
+                    self.consume(TokenType::RightParentheses, "Expected ')'")?;
+
+                    Ok(expression)
+                }
+                _ => Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Expected expression",
+                )),
+            }
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unexpected EOF",
+            ))
         }
     }
 }
@@ -197,8 +594,7 @@ impl<'a> Parser<'a> {
                 _ => match self.scanner.peek().unwrap().token_type {
                     TokenType::Class
                     | TokenType::Function
-                    | TokenType::Var
-                    | TokenType::For
+                    | TokenType::Let
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Print
@@ -213,72 +609,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Box<dyn Expression>> {
-        let expr = self.expression();
-
-        match self.scanner.next() {
-            Some(token) => report_error(Some(token), "Expected EOF"),
-            None => Ok(expr),
-        }
-
-        // Ok(expr)
+    fn parse(&mut self) -> Result<Vec<Box<dyn Statement>>> {
+        self.program()
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Box<dyn Expression>> {
+pub fn parse(source: &[u8]) -> Result<Vec<Box<dyn Statement>>> {
     let mut parser = Parser::new(source);
 
     parser.parse()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_literal() {
-        let source = b"123";
-        let expr = parse(source).unwrap();
-
-        assert_eq!(expr.node_to_string(), "123");
-    }
-
-    #[test]
-    fn test_parse_unary() {
-        let source = b"-123";
-        let expr = parse(source).unwrap();
-
-        assert_eq!(expr.node_to_string(), "(-123)");
-    }
-
-    #[test]
-    fn test_parse_grouping() {
-        let source = b"(123)";
-        let expr = parse(source).unwrap();
-
-        assert_eq!(expr.node_to_string(), "(123)");
-    }
-
-    #[test]
-    fn test_parse_binary() {
-        let source = b"1 + 2";
-        let expr = parse(source).unwrap();
-
-        assert_eq!(expr.node_to_string(), "(1 + 2)");
-    }
-
-    #[test]
-    fn test_parse_precedence() {
-        let source = b"1 + 2 * 3";
-        let expr = parse(source).unwrap();
-
-        assert_eq!(expr.node_to_string(), "(1 + (2 * 3))");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_parse_error() {
-        let source = b"1 +";
-        let _result = parse(source).unwrap();
-    }
 }

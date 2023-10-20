@@ -143,40 +143,6 @@ impl<'a> Iterator for Scanner<'a> {
                 b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(identifier(self, *chr)),
                 // ### Tokens without value
                 // ## Single character tokens
-                // # Arithmetic operators
-                b'+' => Some(Token::new(
-                    TokenType::Plus,
-                    Value::Str("+".to_string()),
-                    self.line,
-                )),
-                b'-' => Some(Token::new(
-                    TokenType::Minus,
-                    Value::Str("-".to_string()),
-                    self.line,
-                )),
-                b'*' => Some(Token::new(
-                    TokenType::Star,
-                    Value::Str("*".to_string()),
-                    self.line,
-                )),
-                b'/' => match self.source_iter.peek() {
-                    // Comments check
-                    Some(b'/') => {
-                        self.source_iter.next();
-                        skip_single_line_comment(self);
-                        self.next()
-                    }
-                    Some(b'*') => {
-                        self.source_iter.next();
-                        skip_multi_line_comment(self);
-                        self.next()
-                    }
-                    _ => Some(Token::new(
-                        TokenType::Slash,
-                        Value::Str("/".to_string()),
-                        self.line,
-                    )),
-                },
                 // # Logical operators
                 b'&' => Some(Token::new(
                     TokenType::And,
@@ -229,12 +195,95 @@ impl<'a> Iterator for Scanner<'a> {
                     Value::Str(".".to_string()),
                     self.line,
                 )),
+                b'?' => Some(Token::new(
+                    TokenType::QuestionMark,
+                    Value::Str("?".to_string()),
+                    self.line,
+                )),
+                b':' => Some(Token::new(
+                    TokenType::Colon,
+                    Value::Str(":".to_string()),
+                    self.line,
+                )),
                 b';' => Some(Token::new(
                     TokenType::Semicolon,
                     Value::Str(";".to_string()),
                     self.line,
                 )),
                 // ## One or Two character tokens
+                // # Arithmetic operators
+                b'+' => match self.source_iter.peek() {
+                    Some(b'=') => {
+                        self.source_iter.next();
+                        Some(Token::new(
+                            TokenType::PlusEqual,
+                            Value::Str("+=".to_string()),
+                            self.line,
+                        ))
+                    }
+                    _ => Some(Token::new(
+                        TokenType::Plus,
+                        Value::Str("+".to_string()),
+                        self.line,
+                    )),
+                },
+                b'-' => match self.source_iter.peek() {
+                    Some(b'=') => {
+                        self.source_iter.next();
+                        Some(Token::new(
+                            TokenType::MinusEqual,
+                            Value::Str("-=".to_string()),
+                            self.line,
+                        ))
+                    }
+                    _ => Some(Token::new(
+                        TokenType::Minus,
+                        Value::Str("-".to_string()),
+                        self.line,
+                    )),
+                },
+                b'*' => match self.source_iter.peek() {
+                    Some(b'=') => {
+                        self.source_iter.next();
+                        Some(Token::new(
+                            TokenType::StarEqual,
+                            Value::Str("*=".to_string()),
+                            self.line,
+                        ))
+                    }
+                    _ => Some(Token::new(
+                        TokenType::Star,
+                        Value::Str("*".to_string()),
+                        self.line,
+                    )),
+                },
+                b'/' => match self.source_iter.peek() {
+                    // Comments check
+                    Some(b'/') => {
+                        self.source_iter.next();
+                        skip_single_line_comment(self);
+                        self.next()
+                    }
+                    Some(b'*') => {
+                        self.source_iter.next();
+                        skip_multi_line_comment(self);
+                        self.next()
+                    }
+                    Some(b'=') => {
+                        self.source_iter.next();
+                        Some(Token::new(
+                            TokenType::SlashEqual,
+                            Value::Str("/=".to_string()),
+                            self.line,
+                        ))
+                    }
+                    _ => Some(Token::new(
+                        TokenType::Slash,
+                        Value::Str("/".to_string()),
+                        self.line,
+                    )),
+                },
+                // # Comparison operators
                 b'!' => {
                     if let Some(b'=') = self.source_iter.peek() {
                         self.source_iter.next();
@@ -422,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_lexing_keywords() {
-        let source = b"function class interface implements if else bool true false null while for return break continue print self var const";
+        let source = b"function class interface implements if else bool true false null while for return break continue print self let const";
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
             Token::new(TokenType::Function, Value::Str(String::from("function")), 1),
@@ -450,7 +499,7 @@ mod tests {
             Token::new(TokenType::Continue, Value::Str(String::from("continue")), 1),
             Token::new(TokenType::Print, Value::Str(String::from("print")), 1),
             Token::new(TokenType::SelfTok, Value::Str(String::from("self")), 1),
-            Token::new(TokenType::Var, Value::Str(String::from("var")), 1),
+            Token::new(TokenType::Let, Value::Str(String::from("let")), 1),
             Token::new(TokenType::Const, Value::Str(String::from("const")), 1),
         ];
         for expected_token in expected_tokens {
