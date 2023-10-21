@@ -6,7 +6,6 @@ use std::{iter::Peekable, slice::Iter};
 
 pub struct Scanner<'a> {
     source_iter: Peekable<Iter<'a, u8>>,
-    // token: u32,
     line: u32,
 }
 
@@ -14,7 +13,6 @@ impl<'a> Scanner<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Scanner {
             source_iter: source.iter().peekable(), // .peekable() .enumerate()
-            // token: 1,
             line: 1,
         }
     }
@@ -96,9 +94,40 @@ fn string(scanner: &mut Scanner, first_char: u8) -> Token {
     let mut str_value = String::new();
 
     while let Some(chr) = scanner.source_iter.next() {
-        if first_char == *chr {
+        if *chr == first_char {
             break;
         }
+
+        if *chr == b'\n' {
+            scanner.line += 1;
+        }
+
+        // Check for escape characters
+        if *chr == b'\\' {
+            match scanner.source_iter.next() {
+                Some(b'n') => str_value.push('\n'),
+                Some(b't') => str_value.push('\t'),
+                Some(b'\\') => str_value.push('\\'),
+                Some(b'\'') => str_value.push('\''),
+                Some(b'"') => str_value.push('"'),
+                Some(b'0') => str_value.push('\0'),
+                Some(b'r') => str_value.push('\r'),
+                Some(c) => {
+                    println!("Error: Invalid escape character: {}", *c as char);
+                    return Token::new(
+                        TokenType::Error,
+                        Value::Str((*c as char).to_string()),
+                        scanner.line,
+                    );
+                }
+                None => {
+                    println!("Error: Unexpected end of file");
+                    return Token::new(TokenType::Error, Value::Str("".to_string()), scanner.line);
+                }
+            }
+            continue;
+        }
+
         str_value.push(*chr as char);
     }
     Token::new(TokenType::String, Value::Str(str_value), scanner.line)
