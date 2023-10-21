@@ -157,8 +157,9 @@ impl<'a> Parser<'a> {
     fn block(&mut self) -> ParseResult<dyn Statement> {
         let mut statements = Vec::new();
 
-        while let Some(token) = self.next() {
+        while let Some(token) = self.peek() {
             if token.token_type == TokenType::RightBrace {
+                self.next();
                 break;
             }
             if let Ok(statement) = self.statement() {
