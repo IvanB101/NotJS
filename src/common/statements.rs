@@ -33,6 +33,7 @@ pub struct ExpressionStatement {
 
 pub struct PrintStatement {
     pub expression: Box<dyn Expression>,
+    pub new_line: bool,
 }
 
 pub struct IfStatement {

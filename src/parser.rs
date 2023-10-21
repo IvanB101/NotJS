@@ -141,10 +141,7 @@ impl<'a> Parser<'a> {
                     self.block()
                 }
                 TokenType::Let | TokenType::Const => self.variable_declaration(),
-                TokenType::Print => {
-                    self.next();
-                    self.print_statement()
-                }
+                TokenType::Print | TokenType::Println => self.print_statement(),
                 TokenType::If => {
                     self.next();
                     self.if_statement()
@@ -252,11 +249,26 @@ impl<'a> Parser<'a> {
     }
 
     fn print_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
+        let new_line = if let Some(Token {
+            token_type: TokenType::Println,
+            ..
+        }) = self.peek()
+        {
+            self.next();
+            true
+        } else {
+            self.next();
+            false
+        };
+
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
 
-        Ok(Box::new(PrintStatement { expression }))
+        Ok(Box::new(PrintStatement {
+            new_line,
+            expression,
+        }))
     }
 
     fn if_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
@@ -613,7 +625,14 @@ impl<'a> Parser<'a> {
         }) = self.next()
         {
             match token_type {
-                TokenType::Identifier => Ok(Box::new(value)),
+                TokenType::Identifier => Err(ParseError::Single(Single::new(
+                    "Identifiers not implemented",
+                    Some(Token {
+                        token_type,
+                        value,
+                        line,
+                    }),
+                )))?, // Ok(Box::new(value))
                 TokenType::Number | TokenType::String | TokenType::True | TokenType::False => {
                     Ok(Box::new(value))
                 }
