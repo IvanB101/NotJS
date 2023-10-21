@@ -2,47 +2,119 @@ use std::io::{Error, Result};
 
 use crate::{
     common::{
-        expressions::{Binary, Expression, Grouping, Literal, Unary},
-        token::{Token, TokenType},
+        expressions::{
+            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Literal,
+            PostfixExpression, PostfixOperator, UnaryExpression,
+        },
+        statements::{
+            BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
+            Statement, VariableDeclaration, WhileStatement,
+        },
+        token::TokenType,
         value::Value,
     },
+    error::generic::GenericResult,
     parser,
 };
 
-impl Expression for Binary {
+// ## Expressions
+impl Expression for AssignmentExpression {
     fn evaluate(&self) -> Result<Value> {
-        let Binary {
-            left,
-            operator: Token { token_type, .. },
-            right,
-        } = self;
+        let value = self.value.evaluate()?;
 
-        match token_type {
-            // Arithmetic
-            TokenType::Plus => Ok((left.evaluate()? + right.evaluate()?)?),
-            TokenType::Minus => Ok((left.evaluate()? - right.evaluate()?)?),
-            TokenType::Star => Ok((left.evaluate()? * right.evaluate()?)?),
-            TokenType::Slash => Ok((left.evaluate()? / right.evaluate()?)?),
-            // Comparison
-            TokenType::EqualEqual => {
-                Ok(Value::Bool(self.left.evaluate()? == self.right.evaluate()?))
+        match self.operator {
+            TokenType::Equal => {
+                println!("{} = {:?}", self.name, value); // Temporary for debugging
             }
-            TokenType::BangEqual => {
-                Ok(Value::Bool(self.left.evaluate()? != self.right.evaluate()?))
+            TokenType::PlusEqual => {
+                println!("{} += {:?}", self.name, value); // Temporary for debugging
             }
-            TokenType::Greater => Ok(Value::Bool(left.evaluate()? > right.evaluate()?)),
-            TokenType::GreaterEqual => Ok(Value::Bool(left.evaluate()? >= right.evaluate()?)),
-            TokenType::Less => Ok(Value::Bool(left.evaluate()? < right.evaluate()?)),
-            TokenType::LessEqual => Ok(Value::Bool(left.evaluate()? <= right.evaluate()?)),
+            TokenType::MinusEqual => {
+                println!("{} -= {:?}", self.name, value); // Temporary for debugging
+            }
+            TokenType::StarEqual => {
+                println!("{} *= {:?}", self.name, value); // Temporary for debugging
+            }
+            TokenType::SlashEqual => {
+                println!("{} /= {:?}", self.name, value); // Temporary for debugging
+            }
             _ => {
-                panic!("Invalid binary operator");
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalid assignment operator",
+                ))
             }
+        }
+
+        Ok(value)
+    }
+
+    fn node_to_string(&self) -> String {
+        format!(
+            "{} {} {}",
+            self.name,
+            match self.operator {
+                TokenType::Equal => "=",
+                TokenType::PlusEqual => "+=",
+                TokenType::MinusEqual => "-=",
+                TokenType::StarEqual => "*=",
+                TokenType::SlashEqual => "/=",
+                _ => panic!("Invalid assignment operator"),
+            },
+            self.value.node_to_string()
+        )
+    }
+}
+
+impl Expression for ConditionalExpression {
+    fn evaluate(&self) -> Result<Value> {
+        let condition = self.condition.evaluate()?;
+
+        if condition.is_truthy() {
+            self.then_branch.evaluate()
+        } else {
+            self.else_branch.evaluate()
         }
     }
 
     fn node_to_string(&self) -> String {
         format!(
-            "({} {} {})",
+            "{} ? {} : {}",
+            self.condition.node_to_string(),
+            self.then_branch.node_to_string(),
+            self.else_branch.node_to_string()
+        )
+    }
+}
+
+impl Expression for BinaryExpression {
+    fn evaluate(&self) -> Result<Value> {
+        let left = self.left.evaluate()?;
+        let right = self.right.evaluate()?;
+
+        match self.operator.token_type {
+            TokenType::Plus => Ok((left + right)?),
+            TokenType::Minus => Ok((left - right)?),
+            TokenType::Star => Ok((left * right)?),
+            TokenType::Slash => Ok((left / right)?),
+            TokenType::EqualEqual => Ok(Value::Bool(left == right)),
+            TokenType::BangEqual => Ok(Value::Bool(left != right)),
+            TokenType::Greater => Ok(Value::Bool(left > right)),
+            TokenType::GreaterEqual => Ok(Value::Bool(left >= right)),
+            TokenType::Less => Ok(Value::Bool(left < right)),
+            TokenType::LessEqual => Ok(Value::Bool(left <= right)),
+            TokenType::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
+            TokenType::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
+            _ => Err(Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid binary operator",
+            )),
+        }
+    }
+
+    fn node_to_string(&self) -> String {
+        format!(
+            "{} {} {}",
             self.left.node_to_string(),
             self.operator.value,
             self.right.node_to_string()
@@ -50,49 +122,108 @@ impl Expression for Binary {
     }
 }
 
-impl Expression for Unary {
+impl Expression for UnaryExpression {
     fn evaluate(&self) -> Result<Value> {
-        let Unary {
-            operator: Token { token_type, .. },
-            expression,
-        } = self;
+        let right = self.right.evaluate()?;
 
-        match token_type {
-            TokenType::Minus => Ok((-(expression.evaluate()?))?),
-            TokenType::Bang => Ok(!expression.evaluate()?),
+        match self.operator.token_type {
+            TokenType::Minus => Ok((-right)?),
+            TokenType::Bang => Ok(!right),
             _ => Err(Error::new(
-                std::io::ErrorKind::Other,
+                std::io::ErrorKind::InvalidInput,
                 "Invalid unary operator",
             )),
         }
     }
 
     fn node_to_string(&self) -> String {
-        format!(
-            "({}{})",
-            self.operator.value,
-            self.expression.node_to_string()
-        )
+        format!("{}{}", self.operator.value, self.right.node_to_string())
     }
 }
 
-impl Expression for Grouping {
+impl Expression for PostfixExpression {
     fn evaluate(&self) -> Result<Value> {
-        self.expression.evaluate()
+        let left = self.left.evaluate()?;
+
+        match self.operator {
+            PostfixOperator::Index(ref index) => {
+                let index = index.evaluate()?;
+                match left {
+                    Value::Str(string) => {
+                        if let Value::Num(num) = index {
+                            let index = num;
+                            // if the number its negative, we start from the end of the string
+                            let index = if index < 0.0 {
+                                string.len() - index.abs() as usize
+                            } else {
+                                index as usize
+                            };
+                            Ok(Value::Str(string[index..index + 1].to_string()))
+                        } else {
+                            return Err(Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                "Invalid index operator",
+                            ));
+                        }
+                    }
+                    // Value::List(list) => {
+                    //     let index = index.as_num()?;
+                    //     let index = index as usize;
+                    //     let index = index % list.len();
+                    //     Ok(list[index].clone())
+                    // }
+                    _ => Err(Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid index operator",
+                    )),
+                }
+            }
+            PostfixOperator::Dot(ref name) => match left {
+                // Value::Object(object) => Ok(object.get(name).unwrap().clone()),
+                _ => Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalid dot operator",
+                )),
+            },
+            PostfixOperator::Call(ref arguments) => match left {
+                // Value::Function(function) => {
+                //     let mut arguments = arguments
+                //         .arguments
+                //         .iter()
+                //         .map(|argument| argument.evaluate())
+                //         .collect::<Result<Vec<Value>>>()?;
+                //     function.call(&mut arguments)
+                // }
+                _ => Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalid call operator",
+                )),
+            },
+        }
     }
 
     fn node_to_string(&self) -> String {
-        format!("({})", self.expression.node_to_string())
+        match self.operator {
+            PostfixOperator::Index(ref index) => {
+                format!("{}[{}]", self.left.node_to_string(), index.node_to_string())
+            }
+            PostfixOperator::Dot(ref name) => {
+                format!("{}.{}", self.left.node_to_string(), name)
+            }
+            PostfixOperator::Call(ref arguments) => {
+                format!("{}({:?})", self.left.node_to_string(), arguments)
+            }
+        }
     }
 }
 
 impl Expression for Literal {
     fn evaluate(&self) -> Result<Value> {
-        Ok(self.value.clone())
+        Ok(self.clone())
     }
 
     fn node_to_string(&self) -> String {
-        match self.value {
+        match self {
             Value::Num(num) => num.to_string(),
             Value::Str(ref string) => "\"".to_string() + string + "\"",
             Value::Bool(boolean) => boolean.to_string(),
@@ -101,131 +232,153 @@ impl Expression for Literal {
     }
 }
 
-pub fn interpret(source: &[u8]) -> Result<()> {
-    let expr = parser::parse(source)?;
+// ## Statements
+impl Statement for BlockStatement {
+    fn execute(&self) -> Result<Value> {
+        let mut result = Value::Null;
 
-    // print!("{:#?}", expr);
+        for statement in &self.statements {
+            result = statement.execute()?;
+        }
 
-    let value = expr.evaluate()?;
+        Ok(result)
+    }
 
-    println!("{}", value);
+    fn node_to_string(&self) -> String {
+        let mut result = String::new();
 
-    Ok(())
+        for statement in &self.statements {
+            result += &statement.node_to_string();
+        }
+
+        result
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parser::parse;
+impl Statement for VariableDeclaration {
+    fn execute(&self) -> Result<Value> {
+        let value = if let Some(ref initializer) = self.initializer {
+            initializer.evaluate()?
+        } else {
+            Value::Null
+        };
 
-    #[test]
-    fn test_interpret_arithmetic() {
-        let source = b"1 + 2 * 3 - 4 / 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Num(5.0));
+        println!("{} = {:?}", self.name, value); // Temporary for debugging
+        Ok(value)
     }
 
-    #[test]
-    fn test_interpret_unary() {
-        let source = b"-1 + -2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Num(-3.0));
+    fn node_to_string(&self) -> String {
+        if let Some(ref initializer) = self.initializer {
+            format!("let {} = {};", self.name, initializer.node_to_string())
+        } else {
+            format!("let {};", self.name)
+        }
+    }
+}
+
+impl Statement for ExpressionStatement {
+    fn execute(&self) -> Result<Value> {
+        self.expression.evaluate()
     }
 
-    #[test]
-    fn test_interpret_grouping() {
-        let source = b"(1 + 2) * 3";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Num(9.0));
+    fn node_to_string(&self) -> String {
+        format!("{};", self.expression.node_to_string())
+    }
+}
+
+impl Statement for PrintStatement {
+    fn execute(&self) -> Result<Value> {
+        let value = self.expression.evaluate()?;
+
+        if self.new_line {
+            println!("{}", value);
+        } else {
+            print!("{}", value);
+        }
+
+        Ok(value)
     }
 
-    #[test]
-    fn test_interpret_comparison() {
-        let source = b"1 > 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+    fn node_to_string(&self) -> String {
+        format!("print {};", self.expression.node_to_string())
+    }
+}
 
-        let source = b"1 >= 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+impl Statement for IfStatement {
+    fn execute(&self) -> Result<Value> {
+        let condition = self.condition.evaluate()?;
 
-        let source = b"1 < 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
-
-        let source = b"1 <= 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
-
-        let source = b"1 == 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
-
-        let source = b"1 != 2";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+        if condition.is_truthy() {
+            self.then_branch.execute()
+        } else if let Some(ref else_branch) = self.else_branch {
+            else_branch.execute()
+        } else {
+            Ok(Value::Null)
+        }
     }
 
-    #[test]
-    fn test_interpret_boolean() {
-        let source = b"true == true";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+    fn node_to_string(&self) -> String {
+        if let Some(ref else_branch) = self.else_branch {
+            format!(
+                "if {} {} else {}",
+                self.condition.node_to_string(),
+                self.then_branch.node_to_string(),
+                else_branch.node_to_string()
+            )
+        } else {
+            format!(
+                "if {} {}",
+                self.condition.node_to_string(),
+                self.then_branch.node_to_string()
+            )
+        }
+    }
+}
 
-        let source = b"true != true";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
+impl Statement for WhileStatement {
+    fn execute(&self) -> Result<Value> {
+        let mut result = Value::Null;
 
-        let source = b"false == false";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+        while self.condition.evaluate()?.is_truthy() {
+            result = self.body.execute()?;
+        }
 
-        let source = b"false != false";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
-
-        let source = b"true == false";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(false));
-
-        let source = b"true != false";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
+        Ok(result)
     }
 
-    #[test]
-    fn test_interpret_string() {
-        let source = b"\"hello\" + \" world\"";
-        let expr = parse(source).unwrap();
-        assert_eq!(
-            expr.evaluate().unwrap(),
-            Value::Str("hello world".to_string())
-        );
+    fn node_to_string(&self) -> String {
+        format!(
+            "while {} {}",
+            self.condition.node_to_string(),
+            self.body.node_to_string()
+        )
+    }
+}
+
+impl Statement for ReturnStatement {
+    fn execute(&self) -> Result<Value> {
+        if let Some(ref value) = self.value {
+            value.evaluate()
+        } else {
+            Ok(Value::Null)
+        }
     }
 
-    #[test]
-    fn test_interpret_null() {
-        let source = b"null";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Null);
+    fn node_to_string(&self) -> String {
+        if let Some(ref value) = self.value {
+            format!("return {};", value.node_to_string())
+        } else {
+            "return;".to_string()
+        }
+    }
+}
+
+pub fn interpret(source: &[u8]) -> GenericResult<()> {
+    let statements = parser::parse(source)?;
+
+    for statement in statements {
+        statement.execute()?;
     }
 
-    #[test]
-    fn test_interpret_coerce_string() {
-        let source = b"\"hello\" + 1";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Str("hello1".to_string()));
-
-        let source = b"!!\"hello\"";
-        let expr = parse(source).unwrap();
-        assert_eq!(expr.evaluate().unwrap(), Value::Bool(true));
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_interpret_invalid_binary() {
-        let source = b"1 + true";
-        let expr = parse(source).unwrap();
-        expr.evaluate().unwrap();
-    }
+    Ok(())
 }

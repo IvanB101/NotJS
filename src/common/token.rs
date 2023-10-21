@@ -1,3 +1,6 @@
+use core::fmt;
+use std::fmt::Display;
+
 use super::value::Value;
 use phf::phf_map;
 
@@ -18,8 +21,9 @@ pub const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
     "break" => TokenType::Break,
     "continue" => TokenType::Continue,
     "print" => TokenType::Print,
+    "println" => TokenType::Println,
     "self" => TokenType::SelfTok,
-    "var" => TokenType::Var,
+    "let" => TokenType::Let,
     "const" => TokenType::Const,
 };
 
@@ -50,12 +54,18 @@ pub enum TokenType {
     RightBracket,
     Comma,
     Dot,
-    Minus,
-    Plus,
+    QuestionMark,
+    Colon,
     Semicolon,
-    Slash,
-    Star,
     // One or two character tokens.
+    Plus,
+    PlusEqual,
+    Minus,
+    MinusEqual,
+    Star,
+    StarEqual,
+    Slash,
+    SlashEqual,
     Bang,
     BangEqual,
     Equal,
@@ -87,9 +97,72 @@ pub enum TokenType {
     Break,
     Continue,
     Print,
+    Println,
     SelfTok,
-    Var,
+    Let,
     Const,
     // Special tokens
     Error,
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let rep = match *self {
+            TokenType::LeftParentheses => "(",
+            TokenType::RightParentheses => ")",
+            TokenType::LeftBrace => "{",
+            TokenType::RightBrace => "}",
+            TokenType::LeftBracket => "[",
+            TokenType::RightBracket => "]",
+            TokenType::Comma => ",",
+            TokenType::Dot => ".",
+            TokenType::QuestionMark => "?",
+            TokenType::Colon => ":",
+            TokenType::Semicolon => ";",
+            TokenType::Plus => "+",
+            TokenType::PlusEqual => "+=",
+            TokenType::Minus => "-",
+            TokenType::MinusEqual => "-=",
+            TokenType::Star => "*",
+            TokenType::StarEqual => "*=",
+            TokenType::Slash => "/",
+            TokenType::SlashEqual => "/=",
+            TokenType::Bang => "!",
+            TokenType::BangEqual => "!=",
+            TokenType::Equal => "=",
+            TokenType::EqualEqual => "==",
+            TokenType::Greater => ">",
+            TokenType::GreaterEqual => ">=",
+            TokenType::Less => "<",
+            TokenType::LessEqual => "<=",
+            TokenType::Number => "Number",
+            TokenType::String => "String",
+            TokenType::Identifier => "Identifier",
+            TokenType::And => "&",
+            TokenType::Or => "|",
+            TokenType::Function => "Function",
+            TokenType::Class => "Class",
+            TokenType::Interface => "Interface",
+            TokenType::Implements => "Implements",
+            TokenType::If => "If",
+            TokenType::Else => "Else",
+            TokenType::Bool => "Bool",
+            TokenType::True => "True",
+            TokenType::False => "False",
+            TokenType::Null => "Null",
+            TokenType::While => "While",
+            TokenType::For => "For",
+            TokenType::Return => "Return",
+            TokenType::Break => "Break",
+            TokenType::Continue => "Continue",
+            TokenType::Print => "Print",
+            TokenType::Println => "Println",
+            TokenType::SelfTok => "Self",
+            TokenType::Let => "Let",
+            TokenType::Const => "Const",
+            TokenType::Error => "Error",
+        };
+
+        write!(f, "{}", rep)
+    }
 }

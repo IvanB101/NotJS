@@ -1,2 +1,3 @@
-// Example expression
-(8 + 2) * -3 - 4 / 2 * 5 + 5 * 3 == -25
+println "Hello World";
+print "new line";
+print " not new line";

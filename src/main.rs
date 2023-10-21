@@ -1,15 +1,19 @@
 use std::{
     env,
     fs::File,
-    io::{stdin, stdout, BufReader, Read, Result, Write},
+    io::{stdin, stdout, BufReader, Read, Write},
 };
 
+use crate::error::generic::GenericResult;
 use crate::interpreter::interpret;
 
 mod common;
+mod error;
 mod interpreter;
 mod lexer;
 mod parser;
+
+type Result<T> = GenericResult<T>;
 
 fn cli() -> Result<()> {
     let mut buffer = String::new();
@@ -39,7 +43,7 @@ fn run_file(path: &str) -> Result<()> {
 
     reader.read_to_end(&mut buffer)?;
 
-    interpreter::interpret(&buffer)
+    Ok(interpreter::interpret(&buffer)?)
 }
 
 fn debug_file(path: &str) -> Result<()> {
@@ -50,9 +54,9 @@ fn debug_file(path: &str) -> Result<()> {
 
     reader.read_to_end(&mut buffer)?;
 
-    let expr = parser::parse(&buffer)?;
+    let program = parser::parse(&buffer)?;
 
-    print!("{:#?} => ", expr);
+    println!("{:#?} => ", program);
 
     interpret(&buffer)?;
 
@@ -90,11 +94,11 @@ fn main() {
     match args.as_slice() {
         [] => {
             println!("\nEjecucion de CLI: ");
-            cli().unwrap();
+            cli().expect("Error");
         }
         [filepath] => {
             if filepath.ends_with(".notjs") {
-                run_file(filepath).unwrap();
+                run_file(filepath).expect("\n\x1b[91mError\x1b[0m");
             } else {
                 println!("File must have .notjs extension");
                 println!("Usage: notjs [path] [-dev]");
@@ -102,9 +106,9 @@ fn main() {
         }
         [filepath, arg2] => {
             if filepath.ends_with(".notjs") && arg2 == "-dev" {
-                debug_file(filepath).unwrap();
+                debug_file(filepath).expect("\n\x1b[91mError\x1b[0m");
             } else if arg2 == "-dev" {
-                debug_cli().unwrap();
+                debug_cli().expect("Error");
             } else {
                 println!("Usage: notjs [path] [-dev]");
             }
