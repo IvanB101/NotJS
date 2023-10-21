@@ -94,9 +94,9 @@ impl Expression for BinaryExpression {
 
         match self.operator.token_type {
             TokenType::Plus => Ok((left + right)?),
-            TokenType::Minus => Ok((left + right)?),
-            TokenType::Star => Ok((left + right)?),
-            TokenType::Slash => Ok((left + right)?),
+            TokenType::Minus => Ok((left - right)?),
+            TokenType::Star => Ok((left * right)?),
+            TokenType::Slash => Ok((left / right)?),
             TokenType::EqualEqual => Ok(Value::Bool(left == right)),
             TokenType::BangEqual => Ok(Value::Bool(left != right)),
             TokenType::Greater => Ok(Value::Bool(left > right)),

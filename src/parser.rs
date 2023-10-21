@@ -16,11 +16,9 @@ use crate::{
     lexer::Scanner,
 };
 
-use crate::error::parse::{FailedParseError, ParseError};
+use crate::error::parse::{MultipleParseErrors, ParseError};
 
-type StmtVecParseResult = Result<Vec<Box<dyn Statement>>, FailedParseError>;
-type StmtParseResult = Result<Box<dyn Statement>, ParseError>;
-type ExprParseResult = Result<Box<dyn Expression>, ParseError>;
+type ParseResult<T> = Result<Box<T>, ParseError>;
 
 struct Parser<'a> {
     scanner: Peekable<Scanner<'a>>,
@@ -84,7 +82,7 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
 impl<'a> Parser<'a> {
-    fn program(&mut self) -> StmtVecParseResult {
+    fn program(&mut self) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
@@ -101,13 +99,13 @@ impl<'a> Parser<'a> {
         }
 
         if !errors.is_empty() {
-            Err(FailedParseError::new(errors))
+            Err(MultipleParseErrors::new(errors))
         } else {
             Ok(statements)
         }
     }
 
-    fn statement(&mut self) -> StmtParseResult {
+    fn statement(&mut self) -> ParseResult<dyn Statement> {
         if let Some(token) = self.scanner.peek() {
             match token.token_type {
                 TokenType::LeftBrace => {
@@ -141,7 +139,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn block(&mut self) -> StmtParseResult {
+    fn block(&mut self) -> ParseResult<dyn Statement> {
         let mut statements = Vec::new();
 
         while let Some(token) = self.scanner.next() {
@@ -158,7 +156,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(BlockStatement { statements }))
     }
 
-    fn variable_declaration(&mut self) -> StmtParseResult {
+    fn variable_declaration(&mut self) -> ParseResult<dyn Statement> {
         match self.scanner.next() {
             Some(Token {
                 value: Value::Str(name),
@@ -183,7 +181,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expression_statement(&mut self) -> StmtParseResult {
+    fn expression_statement(&mut self) -> ParseResult<dyn Statement> {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -191,7 +189,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ExpressionStatement { expression }))
     }
 
-    fn print_statement(&mut self) -> StmtParseResult {
+    fn print_statement(&mut self) -> ParseResult<dyn Statement> {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -199,7 +197,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(PrintStatement { expression }))
     }
 
-    fn if_statement(&mut self) -> StmtParseResult {
+    fn if_statement(&mut self) -> ParseResult<dyn Statement> {
         let condition = self.expression()?;
 
         let then_branch = self.statement()?;
@@ -222,7 +220,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn while_statement(&mut self) -> StmtParseResult {
+    fn while_statement(&mut self) -> ParseResult<dyn Statement> {
         let condition = self.expression()?;
 
         let body = self.statement()?;
@@ -230,7 +228,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(WhileStatement { condition, body }))
     }
 
-    fn return_statement(&mut self) -> StmtParseResult {
+    fn return_statement(&mut self) -> ParseResult<dyn Statement> {
         let value = if let Some(Token {
             token_type: TokenType::Semicolon,
             ..
@@ -246,11 +244,11 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ReturnStatement { value }))
     }
 
-    fn expression(&mut self) -> ExprParseResult {
+    fn expression(&mut self) -> ParseResult<dyn Expression> {
         self.assignment_expression()
     }
 
-    fn assignment_expression(&mut self) -> ExprParseResult {
+    fn assignment_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -276,7 +274,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn conditional_expression(&mut self) -> ExprParseResult {
+    fn conditional_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.logical_or_expression()?;
 
         if let Some(Token {
@@ -302,7 +300,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_or_expression(&mut self) -> ExprParseResult {
+    fn logical_or_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.logical_and_expression()?;
 
         while let Some(Token {
@@ -323,7 +321,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_and_expression(&mut self) -> ExprParseResult {
+    fn logical_and_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.equality_expression()?;
 
         while let Some(Token {
@@ -344,7 +342,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn equality_expression(&mut self) -> ExprParseResult {
+    fn equality_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.relational_expression()?;
 
         while let Some(Token {
@@ -365,7 +363,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn relational_expression(&mut self) -> ExprParseResult {
+    fn relational_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.additive_expression()?;
 
         while let Some(Token {
@@ -387,7 +385,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn additive_expression(&mut self) -> ExprParseResult {
+    fn additive_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.multiplicative_expression()?;
 
         while let Some(Token {
@@ -408,7 +406,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn multiplicative_expression(&mut self) -> ExprParseResult {
+    fn multiplicative_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.unary_expression()?;
 
         while let Some(Token {
@@ -429,7 +427,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn unary_expression(&mut self) -> ExprParseResult {
+    fn unary_expression(&mut self) -> ParseResult<dyn Expression> {
         if let Some(Token {
             token_type: TokenType::Minus | TokenType::Bang,
             ..
@@ -444,7 +442,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn postfix_expression(&mut self) -> ExprParseResult {
+    fn postfix_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.primary_expression()?;
 
         while let Some(Token { token_type, .. }) = self.scanner.peek() {
@@ -538,7 +536,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn primary_expression(&mut self) -> ExprParseResult {
+    fn primary_expression(&mut self) -> ParseResult<dyn Expression> {
         if let Some(Token {
             token_type,
             value,
@@ -601,12 +599,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> StmtVecParseResult {
+    fn parse(&mut self) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
         self.program()
     }
 }
 
-pub fn parse(source: &[u8]) -> StmtVecParseResult {
+pub fn parse(source: &[u8]) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
     let mut parser = Parser::new(source);
 
     parser.parse()

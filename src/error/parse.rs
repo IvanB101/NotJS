@@ -62,17 +62,17 @@ impl Display for ParseError {
 impl Error for ParseError {}
 
 #[derive(Clone)]
-pub struct FailedParseError {
+pub struct MultipleParseErrors {
     errors: Vec<ParseError>,
 }
 
-impl FailedParseError {
+impl MultipleParseErrors {
     pub fn new(errors: Vec<ParseError>) -> Self {
-        FailedParseError { errors }
+        MultipleParseErrors { errors }
     }
 }
 
-impl Debug for FailedParseError {
+impl Debug for MultipleParseErrors {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let err_str = self
             .errors
@@ -84,7 +84,7 @@ impl Debug for FailedParseError {
     }
 }
 
-impl Display for FailedParseError {
+impl Display for MultipleParseErrors {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let err_str = self
             .errors
@@ -96,4 +96,4 @@ impl Display for FailedParseError {
     }
 }
 
-impl Error for FailedParseError {}
+impl Error for MultipleParseErrors {}
