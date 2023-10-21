@@ -281,7 +281,7 @@ impl Statement for ExpressionStatement {
 impl Statement for PrintStatement {
     fn execute(&self) -> Result<Value> {
         let value = self.expression.evaluate()?;
-        println!("{}", value);
+        print!("{}", value);
         Ok(value)
     }
 
