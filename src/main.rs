@@ -106,7 +106,7 @@ fn main() {
         }
         [filepath, arg2] => {
             if filepath.ends_with(".notjs") && arg2 == "-dev" {
-                debug_file(filepath).expect("Error");
+                debug_file(filepath).expect("\n\x1b[91mError\x1b[0m");
             } else if arg2 == "-dev" {
                 debug_cli().expect("Error");
             } else {

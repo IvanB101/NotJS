@@ -22,6 +22,7 @@ pub struct BlockStatement {
 }
 
 pub struct VariableDeclaration {
+    pub mutable: bool,
     pub name: String,
     pub initializer: Option<Box<dyn Expression>>,
 }

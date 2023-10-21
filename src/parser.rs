@@ -13,12 +13,11 @@ use crate::{
         token::{Token, TokenType},
         value::Value,
     },
+    error::parse::{ParseError, ParseResult},
     lexer::Scanner,
 };
 
-use crate::error::parse::{MultipleParseErrors, ParseError};
-
-type ParseResult<T> = Result<Box<T>, ParseError>;
+use crate::error::parse::{Multiple, Single};
 
 struct Parser<'a> {
     actual: Option<Token>,
@@ -51,16 +50,20 @@ impl<'a> Parser<'a> {
                 if *token_type == ttype {
                     Ok(self.next().unwrap())
                 } else {
-                    Err(ParseError::new(message, self.actual.clone()))
+                    Err(ParseError::Single(Single::new(
+                        message,
+                        self.actual.clone(),
+                    )))
                 }
             }
-            None => Err(ParseError::new_unexpected_eof()),
+            None => Err(ParseError::Single(Single::new_unexpected_eof())),
         }
     }
 }
 
 /*
 program = { statement } ;
+(* Statement *)
 statement = block
             | variable_declaration
             | expression_statement
@@ -68,7 +71,6 @@ statement = block
             | if_statement
             | while_statement
             | return_statement ;
-
 block = "{" , { statement } , "}" ;
 variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] , ";" ;
 expression_statement = expression , ";" ;
@@ -77,17 +79,25 @@ if_statement = "if" , "(" , expression , ")" , statement , [ "else" , statement 
 while_statement = "while" , "(" , expression , ")" , statement ;
 return_statement = "return" , [ expression ] , ";" ;
 
+(* Expression *)
 expression = assignment_expression ;
 assignment_expression = conditional_expression , [ assignment_operator , assignment_expression ] ;
 conditional_expression = logical_or_expression , [ "?" , expression , ":" , conditional_expression ] ;
+
+(* BinaryExpression *)
 logical_or_expression = logical_and_expression , { "|" , logical_and_expression } ;
 logical_and_expression = equality_expression , { "&" , equality_expression } ;
 equality_expression = relational_expression , { ( "==" | "!=" ) , relational_expression } ;
 relational_expression = additive_expression , { ( "<" | "<=" | ">" | ">=" ) , additive_expression } ;
 additive_expression = multiplicative_expression , { ( "+" | "-" ) , multiplicative_expression } ;
 multiplicative_expression = unary_expression , { ( "*" | "/" ) , unary_expression } ;
+
+(* UnaryExpression *)
 unary_expression = postfix_expression | ( (  "-" | "!" ) , unary_expression ) ;
+
+(* PostfixExpression *)
 postfix_expression = primary_expression , { "[" , expression , "]" | "." , identifier | "(" , [ argument_list ] , ")" } ;
+
 primary_expression = identifier | literal | "(" , expression , ")" ;
 argument_list = expression , { "," , expression } ;
 assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
@@ -96,7 +106,7 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
 impl<'a> Parser<'a> {
-    fn program(&mut self) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
+    fn program(&mut self) -> ParseResult<Vec<Box<dyn Statement>>> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
@@ -105,32 +115,32 @@ impl<'a> Parser<'a> {
                 Ok(statement) => {
                     statements.push(statement);
                 }
-                Err(err) => {
+                Err(ParseError::Single(err)) => {
                     errors.push(err);
+                    self.synchronize();
+                }
+                Err(ParseError::Multiple(err)) => {
+                    errors.extend(err.errors);
                     self.synchronize();
                 }
             }
         }
 
         if !errors.is_empty() {
-            // print!("{} errors found:\n", errors.len());
-            Err(MultipleParseErrors::new(errors))
+            Err(ParseError::new_multiple(errors))
         } else {
             Ok(statements)
         }
     }
 
-    fn statement(&mut self) -> ParseResult<dyn Statement> {
+    fn statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         if let Some(token) = self.peek() {
             match token.token_type {
                 TokenType::LeftBrace => {
                     self.next();
                     self.block()
                 }
-                TokenType::Let | TokenType::Const => {
-                    self.next();
-                    self.variable_declaration()
-                }
+                TokenType::Let | TokenType::Const => self.variable_declaration(),
                 TokenType::Print => {
                     self.next();
                     self.print_statement()
@@ -154,50 +164,86 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn block(&mut self) -> ParseResult<dyn Statement> {
+    fn block(&mut self) -> ParseResult<Box<dyn Statement>> {
         let mut statements = Vec::new();
+        let mut errors = Vec::new();
 
         while let Some(token) = self.peek() {
             if token.token_type == TokenType::RightBrace {
                 self.next();
                 break;
             }
-            if let Ok(statement) = self.statement() {
-                statements.push(statement);
-            } else {
-                self.synchronize();
+
+            match self.statement() {
+                Ok(statement) => {
+                    statements.push(statement);
+                }
+                Err(ParseError::Single(err)) => {
+                    errors.push(err);
+                    self.synchronize();
+                }
+                Err(ParseError::Multiple(err)) => {
+                    errors.extend(err.errors);
+                    self.synchronize();
+                }
             }
         }
 
-        Ok(Box::new(BlockStatement { statements }))
-    }
-
-    fn variable_declaration(&mut self) -> ParseResult<dyn Statement> {
-        match self.next() {
-            Some(Token {
-                value: Value::Str(name),
-                ..
-            }) => {
-                let initializer = if let Some(Token {
-                    token_type: TokenType::Equal,
-                    ..
-                }) = self.peek()
-                {
-                    Some(self.expression()?)
-                } else {
-                    None
-                };
-
-                self.consume(TokenType::Semicolon, "Expected ';'")?;
-
-                Ok(Box::new(VariableDeclaration { name, initializer }))
-            }
-            Some(token) => Err(ParseError::new("Expected identifier", Some(token))),
-            None => Err(ParseError::new_unexpected_eof()),
+        if !errors.is_empty() {
+            Err(ParseError::Multiple(Multiple::new(errors)))
+        } else {
+            Ok(Box::new(BlockStatement { statements }))
         }
     }
 
-    fn expression_statement(&mut self) -> ParseResult<dyn Statement> {
+    fn variable_declaration(&mut self) -> ParseResult<Box<dyn Statement>> {
+        let mutable = if let Some(Token {
+            token_type: TokenType::Let,
+            ..
+        }) = self.peek()
+        {
+            self.next();
+            true
+        } else {
+            self.consume(TokenType::Const, "Expected 'const' or 'let'")?;
+            false
+        };
+
+        let name = if let Some(Token {
+            token_type: TokenType::Identifier,
+            value: Value::Str(name),
+            ..
+        }) = self.peek()
+        {
+            self.next().unwrap().value.to_string()
+        } else {
+            return Err(ParseError::Single(Single::new(
+                "Expected identifier",
+                self.actual.clone(),
+            )));
+        };
+
+        let initializer = if let Some(Token {
+            token_type: TokenType::Equal,
+            ..
+        }) = self.peek()
+        {
+            self.next();
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "Expected ';'")?;
+
+        Ok(Box::new(VariableDeclaration {
+            mutable,
+            name,
+            initializer,
+        }))
+    }
+
+    fn expression_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -205,7 +251,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ExpressionStatement { expression }))
     }
 
-    fn print_statement(&mut self) -> ParseResult<dyn Statement> {
+    fn print_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -213,7 +259,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(PrintStatement { expression }))
     }
 
-    fn if_statement(&mut self) -> ParseResult<dyn Statement> {
+    fn if_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let condition = self.expression()?;
 
         let then_branch = self.statement()?;
@@ -236,7 +282,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn while_statement(&mut self) -> ParseResult<dyn Statement> {
+    fn while_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let condition = self.expression()?;
 
         let body = self.statement()?;
@@ -244,7 +290,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(WhileStatement { condition, body }))
     }
 
-    fn return_statement(&mut self) -> ParseResult<dyn Statement> {
+    fn return_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let value = if let Some(Token {
             token_type: TokenType::Semicolon,
             ..
@@ -260,11 +306,11 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ReturnStatement { value }))
     }
 
-    fn expression(&mut self) -> ParseResult<dyn Expression> {
+    fn expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         self.assignment_expression()
     }
 
-    fn assignment_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn assignment_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -290,7 +336,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn conditional_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn conditional_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.logical_or_expression()?;
 
         if let Some(Token {
@@ -316,7 +362,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_or_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn logical_or_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.logical_and_expression()?;
 
         while let Some(Token {
@@ -337,7 +383,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_and_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn logical_and_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.equality_expression()?;
 
         while let Some(Token {
@@ -358,7 +404,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn equality_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn equality_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.relational_expression()?;
 
         while let Some(Token {
@@ -379,7 +425,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn relational_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn relational_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.additive_expression()?;
 
         while let Some(Token {
@@ -401,7 +447,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn additive_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn additive_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.multiplicative_expression()?;
 
         while let Some(Token {
@@ -422,7 +468,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn multiplicative_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn multiplicative_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.unary_expression()?;
 
         while let Some(Token {
@@ -443,7 +489,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn unary_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn unary_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         if let Some(Token {
             token_type: TokenType::Minus | TokenType::Bang,
             ..
@@ -458,7 +504,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn postfix_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn postfix_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         let mut expression = self.primary_expression()?;
 
         while let Some(Token { token_type, .. }) = self.peek() {
@@ -489,7 +535,10 @@ impl<'a> Parser<'a> {
                             });
                         }
                         token => {
-                            return Err(ParseError::new("Expected identifier", Some(token)));
+                            return Err(ParseError::Single(Single::new(
+                                "Expected identifier",
+                                Some(token),
+                            )));
                         }
                     }
                 }
@@ -521,12 +570,16 @@ impl<'a> Parser<'a> {
                                         self.next();
                                     }
                                     Some(token) => {
-                                        return Err(ParseError::new(
+                                        return Err(ParseError::Single(Single::new(
                                             "Expected ',' or ')'",
                                             Some(token.clone()),
-                                        ))
+                                        )))
                                     }
-                                    None => return Err(ParseError::new_unexpected_eof()),
+                                    None => {
+                                        return Err(
+                                            ParseError::Single(Single::new_unexpected_eof()),
+                                        )
+                                    }
                                 }
                             }
 
@@ -552,7 +605,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn primary_expression(&mut self) -> ParseResult<dyn Expression> {
+    fn primary_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
         if let Some(Token {
             token_type,
             value,
@@ -571,26 +624,27 @@ impl<'a> Parser<'a> {
 
                     Ok(expression)
                 }
-                _ => Err(ParseError::new(
+                _ => Err(ParseError::Single(Single::new(
                     "Expected expression",
                     Some(Token {
                         token_type,
                         value,
                         line,
                     }),
-                )),
+                ))),
             }
         } else {
-            Err(ParseError::new_unexpected_eof())
+            Err(ParseError::Single(Single::new_unexpected_eof()))
         }
     }
 }
 
 impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
-        while let Some(token) = self.next() {
+        while let Some(token) = self.peek() {
             match token.token_type {
                 TokenType::Semicolon => {
+                    self.next();
                     return;
                 }
                 _ => {
@@ -599,6 +653,7 @@ impl<'a> Parser<'a> {
                             TokenType::Class
                             | TokenType::Function
                             | TokenType::Let
+                            | TokenType::Const
                             | TokenType::If
                             | TokenType::While
                             | TokenType::Print
@@ -615,12 +670,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
+    fn parse(&mut self) -> ParseResult<Vec<Box<dyn Statement>>> {
         self.program()
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Vec<Box<dyn Statement>>, MultipleParseErrors> {
+pub fn parse(source: &[u8]) -> ParseResult<Vec<Box<dyn Statement>>> {
     let mut parser = Parser::new(source);
 
     parser.parse()

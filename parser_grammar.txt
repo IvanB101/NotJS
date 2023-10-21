@@ -1,4 +1,5 @@
 program = { statement } ;
+
 (* Statement *)
 statement = block
             | variable_declaration

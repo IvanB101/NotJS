@@ -24,19 +24,19 @@ impl Expression for AssignmentExpression {
 
         match self.operator {
             TokenType::Equal => {
-                println!("{} = {}", self.name, value); // Temporary for debugging
+                println!("{} = {:?}", self.name, value); // Temporary for debugging
             }
             TokenType::PlusEqual => {
-                println!("{} += {}", self.name, value); // Temporary for debugging
+                println!("{} += {:?}", self.name, value); // Temporary for debugging
             }
             TokenType::MinusEqual => {
-                println!("{} -= {}", self.name, value); // Temporary for debugging
+                println!("{} -= {:?}", self.name, value); // Temporary for debugging
             }
             TokenType::StarEqual => {
-                println!("{} *= {}", self.name, value); // Temporary for debugging
+                println!("{} *= {:?}", self.name, value); // Temporary for debugging
             }
             TokenType::SlashEqual => {
-                println!("{} /= {}", self.name, value); // Temporary for debugging
+                println!("{} /= {:?}", self.name, value); // Temporary for debugging
             }
             _ => {
                 return Err(Error::new(
@@ -103,6 +103,8 @@ impl Expression for BinaryExpression {
             TokenType::GreaterEqual => Ok(Value::Bool(left >= right)),
             TokenType::Less => Ok(Value::Bool(left < right)),
             TokenType::LessEqual => Ok(Value::Bool(left <= right)),
+            TokenType::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
+            TokenType::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "Invalid binary operator",
@@ -149,7 +151,13 @@ impl Expression for PostfixExpression {
                 match left {
                     Value::Str(string) => {
                         if let Value::Num(num) = index {
-                            let index = num as usize;
+                            let index = num;
+                            // if the number its negative, we start from the end of the string
+                            let index = if index < 0.0 {
+                                string.len() - index.abs() as usize
+                            } else {
+                                index as usize
+                            };
                             Ok(Value::Str(string[index..index + 1].to_string()))
                         } else {
                             return Err(Error::new(
@@ -255,7 +263,7 @@ impl Statement for VariableDeclaration {
             Value::Null
         };
 
-        println!("{} = {}", self.name, value); // Temporary for debugging
+        println!("{} = {:?}", self.name, value); // Temporary for debugging
         Ok(value)
     }
 
