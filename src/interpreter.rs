@@ -13,6 +13,7 @@ use crate::{
         token::TokenType,
         value::Value,
     },
+    error::generic::GenericResult,
     parser,
 };
 
@@ -358,7 +359,7 @@ impl Statement for ReturnStatement {
     }
 }
 
-pub fn interpret(source: &[u8]) -> Result<()> {
+pub fn interpret(source: &[u8]) -> GenericResult<()> {
     let statements = parser::parse(source)?;
 
     for statement in statements {

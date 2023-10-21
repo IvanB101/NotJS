@@ -1,9 +1,9 @@
-use std::{io::Result, iter::Peekable};
+use std::iter::Peekable;
 
 use crate::{
     common::{
         expressions::{
-            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Literal,
+            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression,
             PostfixExpression, PostfixOperator, UnaryExpression,
         },
         statements::{
@@ -16,6 +16,12 @@ use crate::{
     lexer::Scanner,
 };
 
+use crate::error::parse::{FailedParseError, ParseError};
+
+type StmtVecParseResult = Result<Vec<Box<dyn Statement>>, FailedParseError>;
+type StmtParseResult = Result<Box<dyn Statement>, ParseError>;
+type ExprParseResult = Result<Box<dyn Expression>, ParseError>;
+
 struct Parser<'a> {
     scanner: Peekable<Scanner<'a>>,
 }
@@ -27,19 +33,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token> {
-        if let Some(token) = self.scanner.peek() {
-            if token.token_type == ttype {
-                return Ok(self.scanner.next().unwrap());
+    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token, ParseError> {
+        match self.scanner.peek() {
+            Some(Token { token_type, .. }) => {
+                if *token_type == ttype {
+                    Ok(self.scanner.next().unwrap())
+                } else {
+                    Err(ParseError::new(message, self.scanner.next()))
+                }
             }
+            None => Err(ParseError::new_unexpected_eof()),
         }
-
-        let err_token = self.scanner.next();
-
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("{}: {:?}", message, err_token),
-        ))
     }
 }
 
@@ -80,51 +84,64 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
 impl<'a> Parser<'a> {
-    fn program(&mut self) -> Result<Vec<Box<dyn Statement>>> {
+    fn program(&mut self) -> StmtVecParseResult {
         let mut statements = Vec::new();
-        let mut had_error = false;
+        let mut errors = Vec::new();
 
         while let Some(_) = self.scanner.peek() {
-            if let Ok(statement) = self.statement() {
-                statements.push(statement);
-            } else {
-                had_error = true;
-                self.synchronize();
+            match self.statement() {
+                Ok(statement) => {
+                    statements.push(statement);
+                }
+                Err(err) => {
+                    errors.push(err);
+                    self.synchronize();
+                }
             }
         }
 
-        println!("Statements: {:?}", statements);
-
-        if had_error {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Parsing failed",
-            ))
+        if !errors.is_empty() {
+            Err(FailedParseError::new(errors))
         } else {
             Ok(statements)
         }
     }
 
-    fn statement(&mut self) -> Result<Box<dyn Statement>> {
-        if let Some(token) = self.scanner.next() {
+    fn statement(&mut self) -> StmtParseResult {
+        if let Some(token) = self.scanner.peek() {
             match token.token_type {
-                TokenType::LeftBrace => self.block(),
-                TokenType::Let | TokenType::Const => self.variable_declaration(),
-                TokenType::Print => self.print_statement(),
-                TokenType::If => self.if_statement(),
-                TokenType::While => self.while_statement(),
-                TokenType::Return => self.return_statement(),
+                TokenType::LeftBrace => {
+                    self.scanner.next();
+                    self.block()
+                }
+                TokenType::Let | TokenType::Const => {
+                    self.scanner.next();
+                    self.variable_declaration()
+                }
+                TokenType::Print => {
+                    self.scanner.next();
+                    self.print_statement()
+                }
+                TokenType::If => {
+                    self.scanner.next();
+                    self.if_statement()
+                }
+                TokenType::While => {
+                    self.scanner.next();
+                    self.while_statement()
+                }
+                TokenType::Return => {
+                    self.scanner.next();
+                    self.return_statement()
+                }
                 _ => self.expression_statement(),
             }
         } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Unexpected EOF",
-            ))
+            Err(ParseError::new_unexpected_eof())
         }
     }
 
-    fn block(&mut self) -> Result<Box<dyn Statement>> {
+    fn block(&mut self) -> StmtParseResult {
         let mut statements = Vec::new();
 
         while let Some(token) = self.scanner.next() {
@@ -141,34 +158,32 @@ impl<'a> Parser<'a> {
         Ok(Box::new(BlockStatement { statements }))
     }
 
-    fn variable_declaration(&mut self) -> Result<Box<dyn Statement>> {
-        if let Some(Token {
-            value: Value::Str(name),
-            ..
-        }) = self.scanner.next()
-        {
-            let initializer = if let Some(Token {
-                token_type: TokenType::Equal,
+    fn variable_declaration(&mut self) -> StmtParseResult {
+        match self.scanner.next() {
+            Some(Token {
+                value: Value::Str(name),
                 ..
-            }) = self.scanner.peek()
-            {
-                Some(self.expression()?)
-            } else {
-                None
-            };
+            }) => {
+                let initializer = if let Some(Token {
+                    token_type: TokenType::Equal,
+                    ..
+                }) = self.scanner.peek()
+                {
+                    Some(self.expression()?)
+                } else {
+                    None
+                };
 
-            self.consume(TokenType::Semicolon, "Expected ';'")?;
+                self.consume(TokenType::Semicolon, "Expected ';'")?;
 
-            Ok(Box::new(VariableDeclaration { name, initializer }))
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Expected identifier",
-            ))
+                Ok(Box::new(VariableDeclaration { name, initializer }))
+            }
+            Some(token) => Err(ParseError::new("Expected identifier", Some(token))),
+            None => Err(ParseError::new_unexpected_eof()),
         }
     }
 
-    fn expression_statement(&mut self) -> Result<Box<dyn Statement>> {
+    fn expression_statement(&mut self) -> StmtParseResult {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -176,7 +191,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ExpressionStatement { expression }))
     }
 
-    fn print_statement(&mut self) -> Result<Box<dyn Statement>> {
+    fn print_statement(&mut self) -> StmtParseResult {
         let expression = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -184,7 +199,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(PrintStatement { expression }))
     }
 
-    fn if_statement(&mut self) -> Result<Box<dyn Statement>> {
+    fn if_statement(&mut self) -> StmtParseResult {
         let condition = self.expression()?;
 
         let then_branch = self.statement()?;
@@ -207,7 +222,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn while_statement(&mut self) -> Result<Box<dyn Statement>> {
+    fn while_statement(&mut self) -> StmtParseResult {
         let condition = self.expression()?;
 
         let body = self.statement()?;
@@ -215,7 +230,7 @@ impl<'a> Parser<'a> {
         Ok(Box::new(WhileStatement { condition, body }))
     }
 
-    fn return_statement(&mut self) -> Result<Box<dyn Statement>> {
+    fn return_statement(&mut self) -> StmtParseResult {
         let value = if let Some(Token {
             token_type: TokenType::Semicolon,
             ..
@@ -231,11 +246,11 @@ impl<'a> Parser<'a> {
         Ok(Box::new(ReturnStatement { value }))
     }
 
-    fn expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn expression(&mut self) -> ExprParseResult {
         self.assignment_expression()
     }
 
-    fn assignment_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn assignment_expression(&mut self) -> ExprParseResult {
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -248,11 +263,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap().token_type;
             let value = self.assignment_expression()?;
 
             expression = Box::new(AssignmentExpression {
                 name: expression.node_to_string(),
-                operator: self.scanner.next().unwrap().token_type,
+                operator,
                 value,
             })
         }
@@ -260,7 +276,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn conditional_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn conditional_expression(&mut self) -> ExprParseResult {
         let mut expression = self.logical_or_expression()?;
 
         if let Some(Token {
@@ -286,7 +302,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_or_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn logical_or_expression(&mut self) -> ExprParseResult {
         let mut expression = self.logical_and_expression()?;
 
         while let Some(Token {
@@ -294,11 +310,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.logical_and_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -306,7 +323,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn logical_and_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn logical_and_expression(&mut self) -> ExprParseResult {
         let mut expression = self.equality_expression()?;
 
         while let Some(Token {
@@ -314,11 +331,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.equality_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -326,7 +344,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn equality_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn equality_expression(&mut self) -> ExprParseResult {
         let mut expression = self.relational_expression()?;
 
         while let Some(Token {
@@ -334,11 +352,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.relational_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -346,7 +365,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn relational_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn relational_expression(&mut self) -> ExprParseResult {
         let mut expression = self.additive_expression()?;
 
         while let Some(Token {
@@ -355,11 +374,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.additive_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -367,7 +387,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn additive_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn additive_expression(&mut self) -> ExprParseResult {
         let mut expression = self.multiplicative_expression()?;
 
         while let Some(Token {
@@ -375,11 +395,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.multiplicative_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -387,7 +408,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn multiplicative_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn multiplicative_expression(&mut self) -> ExprParseResult {
         let mut expression = self.unary_expression()?;
 
         while let Some(Token {
@@ -395,11 +416,12 @@ impl<'a> Parser<'a> {
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.unary_expression()?;
 
             expression = Box::new(BinaryExpression {
                 left: expression,
-                operator: self.scanner.next().unwrap(),
+                operator,
                 right,
             });
         }
@@ -407,24 +429,22 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn unary_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn unary_expression(&mut self) -> ExprParseResult {
         if let Some(Token {
             token_type: TokenType::Minus | TokenType::Bang,
             ..
         }) = self.scanner.peek()
         {
+            let operator = self.scanner.next().unwrap();
             let right = self.unary_expression()?;
 
-            Ok(Box::new(UnaryExpression {
-                operator: self.scanner.next().unwrap(),
-                right,
-            }))
+            Ok(Box::new(UnaryExpression { operator, right }))
         } else {
             self.postfix_expression()
         }
     }
 
-    fn postfix_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn postfix_expression(&mut self) -> ExprParseResult {
         let mut expression = self.primary_expression()?;
 
         while let Some(Token { token_type, .. }) = self.scanner.peek() {
@@ -444,19 +464,19 @@ impl<'a> Parser<'a> {
                 TokenType::Dot => {
                     self.scanner.next();
 
-                    if let Value::Str(name) = self
-                        .consume(TokenType::Identifier, "Expected identifier")?
-                        .value
-                    {
-                        expression = Box::new(PostfixExpression {
-                            left: expression,
-                            operator: PostfixOperator::Dot(name),
-                        });
-                    } else {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "Expected identifier",
-                        ));
+                    match self.consume(TokenType::Identifier, "Expected identifier")? {
+                        Token {
+                            value: Value::Str(name),
+                            ..
+                        } => {
+                            expression = Box::new(PostfixExpression {
+                                left: expression,
+                                operator: PostfixOperator::Dot(name),
+                            });
+                        }
+                        token => {
+                            return Err(ParseError::new("Expected identifier", Some(token)));
+                        }
                     }
                 }
                 TokenType::LeftParentheses => {
@@ -472,23 +492,27 @@ impl<'a> Parser<'a> {
                             loop {
                                 arguments.push(self.expression()?);
 
-                                if let Some(token) = self.scanner.peek() {
-                                    if token.token_type == TokenType::RightParentheses {
+                                match self.scanner.peek() {
+                                    Some(Token {
+                                        token_type: TokenType::RightParentheses,
+                                        ..
+                                    }) => {
                                         self.scanner.next();
                                         break;
-                                    } else if token.token_type == TokenType::Comma {
-                                        self.scanner.next();
-                                    } else {
-                                        return Err(std::io::Error::new(
-                                            std::io::ErrorKind::InvalidData,
-                                            "Expected ',' or ')'",
-                                        ));
                                     }
-                                } else {
-                                    return Err(std::io::Error::new(
-                                        std::io::ErrorKind::InvalidData,
-                                        "Unexpected EOF",
-                                    ));
+                                    Some(Token {
+                                        token_type: TokenType::Comma,
+                                        ..
+                                    }) => {
+                                        self.scanner.next();
+                                    }
+                                    Some(token) => {
+                                        return Err(ParseError::new(
+                                            "Expected ',' or ')'",
+                                            Some(token.clone()),
+                                        ))
+                                    }
+                                    None => return Err(ParseError::new_unexpected_eof()),
                                 }
                             }
 
@@ -514,9 +538,11 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn primary_expression(&mut self) -> Result<Box<dyn Expression>> {
+    fn primary_expression(&mut self) -> ExprParseResult {
         if let Some(Token {
-            token_type, value, ..
+            token_type,
+            value,
+            line,
         }) = self.scanner.next()
         {
             match token_type {
@@ -531,22 +557,22 @@ impl<'a> Parser<'a> {
 
                     Ok(expression)
                 }
-                _ => Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
+                _ => Err(ParseError::new(
                     "Expected expression",
+                    Some(Token {
+                        token_type,
+                        value,
+                        line,
+                    }),
                 )),
             }
         } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Unexpected EOF",
-            ))
+            Err(ParseError::new_unexpected_eof())
         }
     }
 }
 
 impl<'a> Parser<'a> {
-    #[allow(dead_code)]
     fn synchronize(&mut self) {
         while let Some(token) = self.scanner.next() {
             match token.token_type {
@@ -575,12 +601,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(&mut self) -> Result<Vec<Box<dyn Statement>>> {
+    fn parse(&mut self) -> StmtVecParseResult {
         self.program()
     }
 }
 
-pub fn parse(source: &[u8]) -> Result<Vec<Box<dyn Statement>>> {
+pub fn parse(source: &[u8]) -> StmtVecParseResult {
     let mut parser = Parser::new(source);
 
     parser.parse()

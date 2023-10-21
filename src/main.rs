@@ -1,15 +1,19 @@
 use std::{
     env,
     fs::File,
-    io::{stdin, stdout, BufReader, Read, Result, Write},
+    io::{stdin, stdout, BufReader, Read, Write},
 };
 
+use crate::error::generic::GenericResult;
 use crate::interpreter::interpret;
 
 mod common;
+mod error;
 mod interpreter;
 mod lexer;
 mod parser;
+
+type Result<T> = GenericResult<T>;
 
 fn cli() -> Result<()> {
     let mut buffer = String::new();
@@ -39,7 +43,7 @@ fn run_file(path: &str) -> Result<()> {
 
     reader.read_to_end(&mut buffer)?;
 
-    interpreter::interpret(&buffer)
+    Ok(interpreter::interpret(&buffer)?)
 }
 
 fn debug_file(path: &str) -> Result<()> {
@@ -90,7 +94,7 @@ fn main() {
     match args.as_slice() {
         [] => {
             println!("\nEjecucion de CLI: ");
-            cli().unwrap();
+            cli().expect("Error");
         }
         [filepath] => {
             if filepath.ends_with(".notjs") {
@@ -102,9 +106,9 @@ fn main() {
         }
         [filepath, arg2] => {
             if filepath.ends_with(".notjs") && arg2 == "-dev" {
-                debug_file(filepath).unwrap();
+                debug_file(filepath).expect("Error");
             } else if arg2 == "-dev" {
-                debug_cli().unwrap();
+                debug_cli().expect("Error");
             } else {
                 println!("Usage: notjs [path] [-dev]");
             }
