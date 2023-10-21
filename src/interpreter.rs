@@ -147,17 +147,15 @@ impl Expression for PostfixExpression {
                 let index = index.evaluate()?;
                 match left {
                     Value::Str(string) => {
-                        let index = match index {
-                            Value::Num(num) => num as usize,
-                            _ => {
-                                return Err(Error::new(
-                                    std::io::ErrorKind::InvalidInput,
-                                    "Invalid index operator",
-                                ))
-                            }
-                        };
-                        let index = index % string.len();
-                        Ok(Value::Str(string[index..index + 1].to_string()))
+                        if let Value::Num(num) = index {
+                            let index = num as usize;
+                            Ok(Value::Str(string[index..index + 1].to_string()))
+                        } else {
+                            return Err(Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                "Invalid index operator",
+                            ));
+                        }
                     }
                     // Value::List(list) => {
                     //     let index = index.as_num()?;
@@ -212,11 +210,11 @@ impl Expression for PostfixExpression {
 
 impl Expression for Literal {
     fn evaluate(&self) -> Result<Value> {
-        Ok(self.value.clone())
+        Ok(self.clone())
     }
 
     fn node_to_string(&self) -> String {
-        match self.value {
+        match self {
             Value::Num(num) => num.to_string(),
             Value::Str(ref string) => "\"".to_string() + string + "\"",
             Value::Bool(boolean) => boolean.to_string(),

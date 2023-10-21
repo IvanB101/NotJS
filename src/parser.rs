@@ -93,6 +93,8 @@ impl<'a> Parser<'a> {
             }
         }
 
+        println!("Statements: {:?}", statements);
+
         if had_error {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -214,10 +216,14 @@ impl<'a> Parser<'a> {
     }
 
     fn return_statement(&mut self) -> Result<Box<dyn Statement>> {
-        let value = if let Some(Token{token_type: TokenType::Semicolon, ..}) = self.scanner.peek() {
-                None
+        let value = if let Some(Token {
+            token_type: TokenType::Semicolon,
+            ..
+        }) = self.scanner.peek()
+        {
+            None
         } else {
-                Some(self.expression()?)
+            Some(self.expression()?)
         };
 
         self.consume(TokenType::Semicolon, "Expected ';'")?;
@@ -232,29 +238,23 @@ impl<'a> Parser<'a> {
     fn assignment_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.conditional_expression()?;
 
-        match self.scanner.next() {
-            Some(Token { token_type, .. }) => match token_type {
+        if let Some(Token {
+            token_type:
                 TokenType::Equal
                 | TokenType::PlusEqual
                 | TokenType::MinusEqual
                 | TokenType::StarEqual
-                | TokenType::SlashEqual => {
+                | TokenType::SlashEqual,
+            ..
+        }) = self.scanner.peek()
+        {
+            let value = self.assignment_expression()?;
 
-                    let value = self.assignment_expression()?;
-
-                    expression = Box::new(AssignmentExpression {
-                        name: expression.node_to_string(),
-                        operator: token_type,
-                        value,
-                    });
-                }
-                TokenType::Semicolon => {
-                    
-        return Ok(expression)
-                }
-                _ => {}
-            },
-            None => {}
+            expression = Box::new(AssignmentExpression {
+                name: expression.node_to_string(),
+                operator: self.scanner.next().unwrap().token_type,
+                value,
+            })
         }
 
         Ok(expression)
@@ -289,18 +289,18 @@ impl<'a> Parser<'a> {
     fn logical_or_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.logical_and_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            if token.token_type == TokenType::Or {
-                let right = self.logical_and_expression()?;
+        while let Some(Token {
+            token_type: TokenType::Or,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.logical_and_expression()?;
 
-                expression = Box::new(BinaryExpression {
-                    left: expression,
-                    operator: self.scanner.next().unwrap(),
-                    right,
-                });
-            } else {
-                break;
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
@@ -309,18 +309,18 @@ impl<'a> Parser<'a> {
     fn logical_and_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.equality_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            if token.token_type == TokenType::And {
-                let right = self.equality_expression()?;
+        while let Some(Token {
+            token_type: TokenType::And,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.equality_expression()?;
 
-                expression = Box::new(BinaryExpression {
-                    left: expression,
-                    operator: self.scanner.next().unwrap(),
-                    right,
-                });
-            } else {
-                break;
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
@@ -329,21 +329,18 @@ impl<'a> Parser<'a> {
     fn equality_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.relational_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            match token.token_type {
-                TokenType::EqualEqual | TokenType::BangEqual => {
-                    let right = self.relational_expression()?;
+        while let Some(Token {
+            token_type: TokenType::EqualEqual | TokenType::BangEqual,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.relational_expression()?;
 
-                    expression = Box::new(BinaryExpression {
-                        left: expression,
-                        operator: self.scanner.next().unwrap(),
-                        right,
-                    });
-                }
-                _ => {
-                    break;
-                }
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
@@ -352,24 +349,19 @@ impl<'a> Parser<'a> {
     fn relational_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.additive_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            match token.token_type {
-                TokenType::Less
-                | TokenType::LessEqual
-                | TokenType::Greater
-                | TokenType::GreaterEqual => {
-                    let right = self.additive_expression()?;
+        while let Some(Token {
+            token_type:
+                TokenType::Less | TokenType::LessEqual | TokenType::Greater | TokenType::GreaterEqual,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.additive_expression()?;
 
-                    expression = Box::new(BinaryExpression {
-                        left: expression,
-                        operator: self.scanner.next().unwrap(),
-                        right,
-                    });
-                }
-                _ => {
-                    break;
-                }
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
@@ -378,23 +370,18 @@ impl<'a> Parser<'a> {
     fn additive_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.multiplicative_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            match token.token_type {
-                TokenType::Plus | TokenType::Minus => {
-                    
+        while let Some(Token {
+            token_type: TokenType::Plus | TokenType::Minus,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.multiplicative_expression()?;
 
-                    let right = self.multiplicative_expression()?;
-
-                    expression = Box::new(BinaryExpression {
-                        left: expression,
-                        operator: self.scanner.next().unwrap(),
-                        right,
-                    });
-                }
-                _ => {
-                    break;
-                }
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
@@ -403,52 +390,45 @@ impl<'a> Parser<'a> {
     fn multiplicative_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.unary_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            match token.token_type {
-                TokenType::Star | TokenType::Slash => {
-                    let right = self.unary_expression()?;
+        while let Some(Token {
+            token_type: TokenType::Star | TokenType::Slash,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.unary_expression()?;
 
-                    expression = Box::new(BinaryExpression {
-                        left: expression,
-                        operator: self.scanner.next().unwrap(),
-                        right,
-                    });
-                }
-                _ => {
-                    break;
-                }
-            }
+            expression = Box::new(BinaryExpression {
+                left: expression,
+                operator: self.scanner.next().unwrap(),
+                right,
+            });
         }
 
         Ok(expression)
     }
 
     fn unary_expression(&mut self) -> Result<Box<dyn Expression>> {
-        if let Some(token) = self.scanner.peek() {
-            match token.token_type {
-                TokenType::Minus | TokenType::Bang => {
-                    let right = self.unary_expression()?;
+        if let Some(Token {
+            token_type: TokenType::Minus | TokenType::Bang,
+            ..
+        }) = self.scanner.peek()
+        {
+            let right = self.unary_expression()?;
 
-                    Ok(Box::new(UnaryExpression {
-                        operator: self.scanner.next().unwrap(),
-                        right,
-                    }))
-                }
-                _ => self.postfix_expression(),
-            }
+            Ok(Box::new(UnaryExpression {
+                operator: self.scanner.next().unwrap(),
+                right,
+            }))
         } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Unexpected EOF",
-            ))
+            self.postfix_expression()
         }
     }
 
     fn postfix_expression(&mut self) -> Result<Box<dyn Expression>> {
         let mut expression = self.primary_expression()?;
 
-        while let Some(token) = self.scanner.peek() {
-            match token.token_type {
+        while let Some(Token { token_type, .. }) = self.scanner.peek() {
+            match token_type {
                 TokenType::LeftBracket => {
                     self.scanner.next();
 
@@ -535,11 +515,14 @@ impl<'a> Parser<'a> {
     }
 
     fn primary_expression(&mut self) -> Result<Box<dyn Expression>> {
-        if let Some(token) = self.scanner.next() {
-            match token.token_type {
-                TokenType::Identifier => Ok(Box::new(Literal { value: token.value })),
+        if let Some(Token {
+            token_type, value, ..
+        }) = self.scanner.next()
+        {
+            match token_type {
+                TokenType::Identifier => Ok(Box::new(value)),
                 TokenType::Number | TokenType::String | TokenType::True | TokenType::False => {
-                    Ok(Box::new(Literal { value: token.value }))
+                    Ok(Box::new(value))
                 }
                 TokenType::LeftParentheses => {
                     let expression = self.expression()?;
@@ -570,18 +553,22 @@ impl<'a> Parser<'a> {
                 TokenType::Semicolon => {
                     return;
                 }
-                _ => match self.scanner.peek().unwrap().token_type {
-                    TokenType::Class
-                    | TokenType::Function
-                    | TokenType::Let
-                    | TokenType::If
-                    | TokenType::While
-                    | TokenType::Print
-                    | TokenType::Return => {
+                _ => {
+                    if let Some(Token {
+                        token_type:
+                            TokenType::Class
+                            | TokenType::Function
+                            | TokenType::Let
+                            | TokenType::If
+                            | TokenType::While
+                            | TokenType::Print
+                            | TokenType::Return,
+                        ..
+                    }) = self.scanner.peek()
+                    {
                         return;
                     }
-                    _ => {}
-                },
+                }
             }
 
             self.scanner.next();

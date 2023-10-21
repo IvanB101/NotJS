@@ -63,9 +63,7 @@ pub struct PostfixExpression {
     pub operator: PostfixOperator,
 }
 
-pub struct Literal {
-    pub value: Value,
-}
+pub type Literal = Value;
 
 impl fmt::Debug for dyn Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -73,8 +71,8 @@ impl fmt::Debug for dyn Expression {
     }
 }
 
-impl fmt::Debug for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
-}
+// impl fmt::Debug for Literal {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{:?}", self.value)
+//     }
+// }
