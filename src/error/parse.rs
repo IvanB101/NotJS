@@ -9,6 +9,7 @@ pub type ParseResult<T> = Result<T, ParseError>;
 pub enum ParseError {
     Single(Single),
     Multiple(Multiple),
+    UndefinedVariable(UndefinedVariable),
 }
 
 impl ParseError {
@@ -16,8 +17,12 @@ impl ParseError {
         ParseError::Single(Single::new(message, token))
     }
 
-    pub fn new_multiple(errors: Vec<Single>) -> Self {
+    pub fn new_multiple(errors: Vec<ParseError>) -> Self {
         ParseError::Multiple(Multiple::new(errors))
+    }
+
+    pub fn new_undefined_variable(name: String) -> Self {
+        ParseError::UndefinedVariable(UndefinedVariable::new(name))
     }
 
     pub fn new_unexpected_eof() -> Self {
@@ -30,6 +35,7 @@ impl Debug for ParseError {
         match self {
             ParseError::Single(err) => write!(f, "{}", err),
             ParseError::Multiple(err) => write!(f, "{}", err),
+            ParseError::UndefinedVariable(err) => write!(f, "{}", err),
         }
     }
 }
@@ -39,6 +45,7 @@ impl Display for ParseError {
         match self {
             ParseError::Single(err) => write!(f, "{}", err),
             ParseError::Multiple(err) => write!(f, "{}", err),
+            ParseError::UndefinedVariable(err) => write!(f, "{}", err),
         }
     }
 }
@@ -105,11 +112,11 @@ impl Error for Single {}
 
 #[derive(Clone)]
 pub struct Multiple {
-    pub errors: Vec<Single>,
+    pub errors: Vec<ParseError>,
 }
 
 impl Multiple {
-    pub fn new(errors: Vec<Single>) -> Self {
+    pub fn new(errors: Vec<ParseError>) -> Self {
         Multiple { errors }
     }
 }
@@ -139,3 +146,32 @@ impl Display for Multiple {
 }
 
 impl Error for Multiple {}
+
+#[derive(Clone)]
+pub struct UndefinedVariable {
+    pub message: String,
+    pub name: String,
+}
+
+impl UndefinedVariable {
+    pub fn new(name: String) -> Self {
+        UndefinedVariable {
+            message: format!("Undefined variable: {}", name),
+            name,
+        }
+    }
+}
+
+impl Debug for UndefinedVariable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Display for UndefinedVariable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for UndefinedVariable {}

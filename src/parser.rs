@@ -1,4 +1,4 @@
-use std::iter::Peekable;
+use std::{collections::HashMap, iter::Peekable};
 
 use crate::{
     common::{
@@ -23,6 +23,8 @@ struct Parser<'a> {
     actual: Option<Token>,
     // previous: Option<Token>,
     _scanner: Peekable<Scanner<'a>>,
+    scope: HashMap<String, Value>,
+    // previous_scope: Option<Box<HashMap<String, Value>>>,
 }
 
 impl<'a> Parser<'a> {
@@ -31,6 +33,7 @@ impl<'a> Parser<'a> {
             actual: None,
             // previous: None,
             _scanner: Scanner::new(source).peekable(),
+            scope: HashMap::new(),
         }
     }
 
@@ -115,8 +118,12 @@ impl<'a> Parser<'a> {
                 Ok(statement) => {
                     statements.push(statement);
                 }
+                Err(ParseError::UndefinedVariable(err)) => {
+                    errors.push(ParseError::UndefinedVariable(err));
+                    self.synchronize();
+                }
                 Err(ParseError::Single(err)) => {
-                    errors.push(err);
+                    errors.push(ParseError::Single(err));
                     self.synchronize();
                 }
                 Err(ParseError::Multiple(err)) => {
@@ -175,8 +182,12 @@ impl<'a> Parser<'a> {
                 Ok(statement) => {
                     statements.push(statement);
                 }
+                Err(ParseError::UndefinedVariable(err)) => {
+                    errors.push(ParseError::UndefinedVariable(err));
+                    self.synchronize();
+                }
                 Err(ParseError::Single(err)) => {
-                    errors.push(err);
+                    errors.push(ParseError::Single(err));
                     self.synchronize();
                 }
                 Err(ParseError::Multiple(err)) => {
@@ -206,19 +217,10 @@ impl<'a> Parser<'a> {
             false
         };
 
-        let name = if let Some(Token {
-            token_type: TokenType::Identifier,
-            value: Value::Str(name),
-            ..
-        }) = self.peek()
-        {
-            self.next().unwrap().value.to_string()
-        } else {
-            return Err(ParseError::Single(Single::new(
-                "Expected identifier",
-                self.actual.clone(),
-            )));
-        };
+        let name = self
+            .consume(TokenType::Identifier, "Expected identifier")?
+            .value
+            .to_string();
 
         let initializer = if let Some(Token {
             token_type: TokenType::Equal,
