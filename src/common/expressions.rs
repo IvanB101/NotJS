@@ -67,7 +67,7 @@ pub type Literal = Value;
 
 impl fmt::Debug for dyn Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self) //node_to_string
+        write!(f, "{:?}", self.node_to_string())
     }
 }
 

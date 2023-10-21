@@ -54,9 +54,9 @@ fn debug_file(path: &str) -> Result<()> {
 
     reader.read_to_end(&mut buffer)?;
 
-    let expr = parser::parse(&buffer)?;
+    let program = parser::parse(&buffer)?;
 
-    print!("{:#?} => ", expr);
+    println!("{:#?} => ", program);
 
     interpret(&buffer)?;
 
@@ -98,7 +98,7 @@ fn main() {
         }
         [filepath] => {
             if filepath.ends_with(".notjs") {
-                run_file(filepath).unwrap();
+                run_file(filepath).expect("\n\x1b[91mError\x1b[0m");
             } else {
                 println!("File must have .notjs extension");
                 println!("Usage: notjs [path] [-dev]");

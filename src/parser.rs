@@ -21,23 +21,37 @@ use crate::error::parse::{MultipleParseErrors, ParseError};
 type ParseResult<T> = Result<Box<T>, ParseError>;
 
 struct Parser<'a> {
-    scanner: Peekable<Scanner<'a>>,
+    actual: Option<Token>,
+    // previous: Option<Token>,
+    _scanner: Peekable<Scanner<'a>>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Parser {
-            scanner: Scanner::new(source).peekable(),
+            actual: None,
+            // previous: None,
+            _scanner: Scanner::new(source).peekable(),
         }
     }
 
+    fn next(&mut self) -> Option<Token> {
+        // self.previous = self.actual.take();
+        self.actual = self._scanner.next();
+        self.actual.clone()
+    }
+
+    fn peek(&mut self) -> Option<&Token> {
+        self._scanner.peek()
+    }
+
     fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token, ParseError> {
-        match self.scanner.peek() {
+        match self.peek() {
             Some(Token { token_type, .. }) => {
                 if *token_type == ttype {
-                    Ok(self.scanner.next().unwrap())
+                    Ok(self.next().unwrap())
                 } else {
-                    Err(ParseError::new(message, self.scanner.next()))
+                    Err(ParseError::new(message, self.actual.clone()))
                 }
             }
             None => Err(ParseError::new_unexpected_eof()),
@@ -86,7 +100,7 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
-        while let Some(_) = self.scanner.peek() {
+        while let Some(_) = self.peek() {
             match self.statement() {
                 Ok(statement) => {
                     statements.push(statement);
@@ -99,6 +113,7 @@ impl<'a> Parser<'a> {
         }
 
         if !errors.is_empty() {
+            // print!("{} errors found:\n", errors.len());
             Err(MultipleParseErrors::new(errors))
         } else {
             Ok(statements)
@@ -106,30 +121,30 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> ParseResult<dyn Statement> {
-        if let Some(token) = self.scanner.peek() {
+        if let Some(token) = self.peek() {
             match token.token_type {
                 TokenType::LeftBrace => {
-                    self.scanner.next();
+                    self.next();
                     self.block()
                 }
                 TokenType::Let | TokenType::Const => {
-                    self.scanner.next();
+                    self.next();
                     self.variable_declaration()
                 }
                 TokenType::Print => {
-                    self.scanner.next();
+                    self.next();
                     self.print_statement()
                 }
                 TokenType::If => {
-                    self.scanner.next();
+                    self.next();
                     self.if_statement()
                 }
                 TokenType::While => {
-                    self.scanner.next();
+                    self.next();
                     self.while_statement()
                 }
                 TokenType::Return => {
-                    self.scanner.next();
+                    self.next();
                     self.return_statement()
                 }
                 _ => self.expression_statement(),
@@ -142,7 +157,7 @@ impl<'a> Parser<'a> {
     fn block(&mut self) -> ParseResult<dyn Statement> {
         let mut statements = Vec::new();
 
-        while let Some(token) = self.scanner.next() {
+        while let Some(token) = self.next() {
             if token.token_type == TokenType::RightBrace {
                 break;
             }
@@ -157,7 +172,7 @@ impl<'a> Parser<'a> {
     }
 
     fn variable_declaration(&mut self) -> ParseResult<dyn Statement> {
-        match self.scanner.next() {
+        match self.next() {
             Some(Token {
                 value: Value::Str(name),
                 ..
@@ -165,7 +180,7 @@ impl<'a> Parser<'a> {
                 let initializer = if let Some(Token {
                     token_type: TokenType::Equal,
                     ..
-                }) = self.scanner.peek()
+                }) = self.peek()
                 {
                     Some(self.expression()?)
                 } else {
@@ -205,9 +220,9 @@ impl<'a> Parser<'a> {
         let else_branch = if let Some(Token {
             token_type: TokenType::Else,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            self.scanner.next();
+            self.next();
             Some(self.statement()?)
         } else {
             None
@@ -232,7 +247,7 @@ impl<'a> Parser<'a> {
         let value = if let Some(Token {
             token_type: TokenType::Semicolon,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
             None
         } else {
@@ -259,9 +274,9 @@ impl<'a> Parser<'a> {
                 | TokenType::StarEqual
                 | TokenType::SlashEqual,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap().token_type;
+            let operator = self.next().unwrap().token_type;
             let value = self.assignment_expression()?;
 
             expression = Box::new(AssignmentExpression {
@@ -280,9 +295,9 @@ impl<'a> Parser<'a> {
         if let Some(Token {
             token_type: TokenType::QuestionMark,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            self.scanner.next();
+            self.next();
 
             let then_branch = self.expression()?;
 
@@ -306,9 +321,9 @@ impl<'a> Parser<'a> {
         while let Some(Token {
             token_type: TokenType::Or,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.logical_and_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -327,9 +342,9 @@ impl<'a> Parser<'a> {
         while let Some(Token {
             token_type: TokenType::And,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.equality_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -348,9 +363,9 @@ impl<'a> Parser<'a> {
         while let Some(Token {
             token_type: TokenType::EqualEqual | TokenType::BangEqual,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.relational_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -370,9 +385,9 @@ impl<'a> Parser<'a> {
             token_type:
                 TokenType::Less | TokenType::LessEqual | TokenType::Greater | TokenType::GreaterEqual,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.additive_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -391,9 +406,9 @@ impl<'a> Parser<'a> {
         while let Some(Token {
             token_type: TokenType::Plus | TokenType::Minus,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.multiplicative_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -412,9 +427,9 @@ impl<'a> Parser<'a> {
         while let Some(Token {
             token_type: TokenType::Star | TokenType::Slash,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.unary_expression()?;
 
             expression = Box::new(BinaryExpression {
@@ -431,9 +446,9 @@ impl<'a> Parser<'a> {
         if let Some(Token {
             token_type: TokenType::Minus | TokenType::Bang,
             ..
-        }) = self.scanner.peek()
+        }) = self.peek()
         {
-            let operator = self.scanner.next().unwrap();
+            let operator = self.next().unwrap();
             let right = self.unary_expression()?;
 
             Ok(Box::new(UnaryExpression { operator, right }))
@@ -445,10 +460,10 @@ impl<'a> Parser<'a> {
     fn postfix_expression(&mut self) -> ParseResult<dyn Expression> {
         let mut expression = self.primary_expression()?;
 
-        while let Some(Token { token_type, .. }) = self.scanner.peek() {
+        while let Some(Token { token_type, .. }) = self.peek() {
             match token_type {
                 TokenType::LeftBracket => {
-                    self.scanner.next();
+                    self.next();
 
                     let index = self.expression()?;
 
@@ -460,7 +475,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 TokenType::Dot => {
-                    self.scanner.next();
+                    self.next();
 
                     match self.consume(TokenType::Identifier, "Expected identifier")? {
                         Token {
@@ -478,11 +493,11 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TokenType::LeftParentheses => {
-                    self.scanner.next();
+                    self.next();
 
-                    let arguments = if let Some(token) = self.scanner.peek() {
+                    let arguments = if let Some(token) = self.peek() {
                         if token.token_type == TokenType::RightParentheses {
-                            self.scanner.next();
+                            self.next();
                             None
                         } else {
                             let mut arguments = Vec::new();
@@ -490,19 +505,19 @@ impl<'a> Parser<'a> {
                             loop {
                                 arguments.push(self.expression()?);
 
-                                match self.scanner.peek() {
+                                match self.peek() {
                                     Some(Token {
                                         token_type: TokenType::RightParentheses,
                                         ..
                                     }) => {
-                                        self.scanner.next();
+                                        self.next();
                                         break;
                                     }
                                     Some(Token {
                                         token_type: TokenType::Comma,
                                         ..
                                     }) => {
-                                        self.scanner.next();
+                                        self.next();
                                     }
                                     Some(token) => {
                                         return Err(ParseError::new(
@@ -541,7 +556,7 @@ impl<'a> Parser<'a> {
             token_type,
             value,
             line,
-        }) = self.scanner.next()
+        }) = self.next()
         {
             match token_type {
                 TokenType::Identifier => Ok(Box::new(value)),
@@ -572,7 +587,7 @@ impl<'a> Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
-        while let Some(token) = self.scanner.next() {
+        while let Some(token) = self.next() {
             match token.token_type {
                 TokenType::Semicolon => {
                     return;
@@ -588,14 +603,14 @@ impl<'a> Parser<'a> {
                             | TokenType::Print
                             | TokenType::Return,
                         ..
-                    }) = self.scanner.peek()
+                    }) = self.peek()
                     {
                         return;
                     }
                 }
             }
 
-            self.scanner.next();
+            self.next();
         }
     }
 

@@ -31,12 +31,12 @@ impl Debug for ParseError {
             Some(Token { value, line, .. }) => {
                 write!(
                     f,
-                    "Parse error: {} at line: {} at token: {}",
+                    "\x1b[31mParse error:\x1b[0m {} at line: {} after token: {:?}",
                     self.message, line, value
                 )
             }
             None => {
-                write!(f, "Parse error: unexpected end of file",)
+                write!(f, "\x1b[31mParse error:\x1b[0m unexpected end of file",)
             }
         }
     }
@@ -48,12 +48,12 @@ impl Display for ParseError {
             Some(Token { value, line, .. }) => {
                 write!(
                     f,
-                    "Parse error: {} at line: {} at token: {}",
+                    "\x1b[31mParse error:\x1b[0m {} at line: {} after token: {:?}",
                     self.message, line, value
                 )
             }
             None => {
-                write!(f, "Parse error: unexpected end of file",)
+                write!(f, "\x1b[31mParse error:\x1b[0m unexpected end of file",)
             }
         }
     }
@@ -80,7 +80,7 @@ impl Debug for MultipleParseErrors {
             .map(|x| format!("{}", x))
             .fold(String::new(), |ac, x| ac + &x + "\n");
 
-        write!(f, "Failed to parse, errors \n{}", err_str)
+        write!(f, "Failed to parse, errors:\n{}", err_str)
     }
 }
 
@@ -92,7 +92,7 @@ impl Display for MultipleParseErrors {
             .map(|x| format!("{}", x))
             .fold(String::new() + "\n", |ac, x| ac + &x + "\n");
 
-        write!(f, "Failed to parse, errors \n{}", err_str)
+        write!(f, "Failed to parse, errors:\n{}", err_str)
     }
 }
 
