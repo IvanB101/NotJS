@@ -1,5 +1,6 @@
-println "Hello World";
-print "new line";
-println " not new line";
+let i = 1;
 
-let x = 5;
+while (i <= 10) {
+    println(i);
+    i = i + 1;
+}

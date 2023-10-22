@@ -1,9 +1,10 @@
-use std::{collections::HashMap, iter::Peekable};
+use std::iter::Peekable;
 
 use crate::{
     common::{
+        environment::Environment,
         expressions::{
-            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression,
+            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Identifier,
             PostfixExpression, PostfixOperator, UnaryExpression,
         },
         statements::{
@@ -11,34 +12,31 @@ use crate::{
             Statement, VariableDeclaration, WhileStatement,
         },
         token::{Token, TokenType},
-        value::Value,
     },
     error::parse::{ParseError, ParseResult},
     lexer::Scanner,
 };
 
-use crate::error::parse::{Multiple, Single};
-
 struct Parser<'a> {
     actual: Option<Token>,
-    // previous: Option<Token>,
+    _environment: Environment,
     _scanner: Peekable<Scanner<'a>>,
-    scope: HashMap<String, Value>,
-    // previous_scope: Option<Box<HashMap<String, Value>>>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Parser {
             actual: None,
-            // previous: None,
+            _environment: Environment::new(),
             _scanner: Scanner::new(source).peekable(),
-            scope: HashMap::new(),
         }
     }
 
+    fn parse(&mut self) -> ParseResult<Vec<Box<dyn Statement>>> {
+        self.program()
+    }
+
     fn next(&mut self) -> Option<Token> {
-        // self.previous = self.actual.take();
         self.actual = self._scanner.next();
         self.actual.clone()
     }
@@ -47,19 +45,49 @@ impl<'a> Parser<'a> {
         self._scanner.peek()
     }
 
-    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token, ParseError> {
+    fn consume(&mut self, ttype: TokenType) -> Result<Token, ParseError> {
         match self.peek() {
             Some(Token { token_type, .. }) => {
                 if *token_type == ttype {
                     Ok(self.next().unwrap())
                 } else {
-                    Err(ParseError::Single(Single::new(
-                        message,
-                        self.actual.clone(),
-                    )))
+                    Err(ParseError::new_missing_token(
+                        ttype,
+                        self.actual.clone().unwrap(),
+                    ))
                 }
             }
-            None => Err(ParseError::Single(Single::new_unexpected_eof())),
+            None => Err(ParseError::new_unexpected_eof()),
+        }
+    }
+
+    fn synchronize(&mut self) {
+        while let Some(token) = self.peek() {
+            match token.token_type {
+                TokenType::Semicolon => {
+                    self.next();
+                    return;
+                }
+                _ => {
+                    if let Some(Token {
+                        token_type:
+                            TokenType::Class
+                            | TokenType::Function
+                            | TokenType::Let
+                            | TokenType::Const
+                            | TokenType::If
+                            | TokenType::While
+                            | TokenType::Print
+                            | TokenType::Return,
+                        ..
+                    }) = self.peek()
+                    {
+                        return;
+                    }
+                }
+            }
+
+            self.next();
         }
     }
 }
@@ -117,10 +145,6 @@ impl<'a> Parser<'a> {
             match self.statement() {
                 Ok(statement) => {
                     statements.push(statement);
-                }
-                Err(ParseError::UndefinedVariable(err)) => {
-                    errors.push(ParseError::UndefinedVariable(err));
-                    self.synchronize();
                 }
                 Err(ParseError::Single(err)) => {
                     errors.push(ParseError::Single(err));
@@ -182,10 +206,6 @@ impl<'a> Parser<'a> {
                 Ok(statement) => {
                     statements.push(statement);
                 }
-                Err(ParseError::UndefinedVariable(err)) => {
-                    errors.push(ParseError::UndefinedVariable(err));
-                    self.synchronize();
-                }
                 Err(ParseError::Single(err)) => {
                     errors.push(ParseError::Single(err));
                     self.synchronize();
@@ -198,7 +218,7 @@ impl<'a> Parser<'a> {
         }
 
         if !errors.is_empty() {
-            Err(ParseError::Multiple(Multiple::new(errors)))
+            Err(ParseError::new_multiple(errors))
         } else {
             Ok(Box::new(BlockStatement { statements }))
         }
@@ -213,14 +233,11 @@ impl<'a> Parser<'a> {
             self.next();
             true
         } else {
-            self.consume(TokenType::Const, "Expected 'const' or 'let'")?;
+            self.next();
             false
         };
 
-        let name = self
-            .consume(TokenType::Identifier, "Expected identifier")?
-            .value
-            .to_string();
+        let identifier = self.consume(TokenType::Identifier)?;
 
         let initializer = if let Some(Token {
             token_type: TokenType::Equal,
@@ -233,11 +250,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.consume(TokenType::Semicolon, "Expected ';'")?;
+        self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(VariableDeclaration {
             mutable,
-            name,
+            identifier,
             initializer,
         }))
     }
@@ -245,7 +262,7 @@ impl<'a> Parser<'a> {
     fn expression_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
 
-        self.consume(TokenType::Semicolon, "Expected ';'")?;
+        self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ExpressionStatement { expression }))
     }
@@ -265,7 +282,7 @@ impl<'a> Parser<'a> {
 
         let expression = self.expression()?;
 
-        self.consume(TokenType::Semicolon, "Expected ';'")?;
+        self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(PrintStatement {
             new_line,
@@ -315,7 +332,7 @@ impl<'a> Parser<'a> {
             Some(self.expression()?)
         };
 
-        self.consume(TokenType::Semicolon, "Expected ';'")?;
+        self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ReturnStatement { value }))
     }
@@ -325,6 +342,16 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
+        let identifier = if let Some(Token {
+            token_type: TokenType::Identifier,
+            ..
+        }) = self.peek()
+        {
+            self.peek().cloned()
+        } else {
+            None
+        };
+
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -341,7 +368,7 @@ impl<'a> Parser<'a> {
             let value = self.assignment_expression()?;
 
             expression = Box::new(AssignmentExpression {
-                name: expression.node_to_string(),
+                identifier: identifier.unwrap(),
                 operator,
                 value,
             })
@@ -362,7 +389,7 @@ impl<'a> Parser<'a> {
 
             let then_branch = self.expression()?;
 
-            self.consume(TokenType::Colon, "Expected ':'")?;
+            self.consume(TokenType::Colon)?;
 
             let else_branch = self.conditional_expression()?;
 
@@ -528,7 +555,7 @@ impl<'a> Parser<'a> {
 
                     let index = self.expression()?;
 
-                    self.consume(TokenType::RightBracket, "Expected ']'")?;
+                    self.consume(TokenType::RightBracket)?;
 
                     expression = Box::new(PostfixExpression {
                         left: expression,
@@ -538,23 +565,12 @@ impl<'a> Parser<'a> {
                 TokenType::Dot => {
                     self.next();
 
-                    match self.consume(TokenType::Identifier, "Expected identifier")? {
-                        Token {
-                            value: Value::Str(name),
-                            ..
-                        } => {
-                            expression = Box::new(PostfixExpression {
-                                left: expression,
-                                operator: PostfixOperator::Dot(name),
-                            });
-                        }
-                        token => {
-                            return Err(ParseError::Single(Single::new(
-                                "Expected identifier",
-                                Some(token),
-                            )));
-                        }
-                    }
+                    let name = self.consume(TokenType::Identifier)?;
+
+                    expression = Box::new(PostfixExpression {
+                        left: expression,
+                        operator: PostfixOperator::Dot(name.value.to_string()),
+                    });
                 }
                 TokenType::LeftParentheses => {
                     self.next();
@@ -584,16 +600,12 @@ impl<'a> Parser<'a> {
                                         self.next();
                                     }
                                     Some(token) => {
-                                        return Err(ParseError::Single(Single::new(
-                                            "Expected ',' or ')'",
-                                            Some(token.clone()),
+                                        return Err(ParseError::new_single(format!(
+                                            "Expected ')' or ',' after argument, found: {}",
+                                            token.value
                                         )))
                                     }
-                                    None => {
-                                        return Err(
-                                            ParseError::Single(Single::new_unexpected_eof()),
-                                        )
-                                    }
+                                    None => return Err(ParseError::new_unexpected_eof()),
                                 }
                             }
 
@@ -603,7 +615,7 @@ impl<'a> Parser<'a> {
                         None
                     };
 
-                    self.consume(TokenType::RightParentheses, "Expected ')'")?;
+                    self.consume(TokenType::RightParentheses)?;
 
                     expression = Box::new(PostfixExpression {
                         left: expression,
@@ -627,72 +639,31 @@ impl<'a> Parser<'a> {
         }) = self.next()
         {
             match token_type {
-                TokenType::Identifier => Err(ParseError::Single(Single::new(
-                    "Identifiers not implemented",
-                    Some(Token {
+                TokenType::Identifier => Ok(Box::new(Identifier {
+                    identifier: Token {
                         token_type,
                         value,
                         line,
-                    }),
-                )))?, // Ok(Box::new(value))
+                    },
+                })),
                 TokenType::Number | TokenType::String | TokenType::True | TokenType::False => {
                     Ok(Box::new(value))
                 }
                 TokenType::LeftParentheses => {
                     let expression = self.expression()?;
 
-                    self.consume(TokenType::RightParentheses, "Expected ')'")?;
+                    self.consume(TokenType::RightParentheses)?;
 
                     Ok(expression)
                 }
-                _ => Err(ParseError::Single(Single::new(
-                    "Expected expression",
-                    Some(Token {
-                        token_type,
-                        value,
-                        line,
-                    }),
+                _ => Err(ParseError::new_single(format!(
+                    "Expected identifier, number, string, true, false or '(' after: {} at line {}",
+                    value, line
                 ))),
             }
         } else {
-            Err(ParseError::Single(Single::new_unexpected_eof()))
+            Err(ParseError::new_unexpected_eof())
         }
-    }
-}
-
-impl<'a> Parser<'a> {
-    fn synchronize(&mut self) {
-        while let Some(token) = self.peek() {
-            match token.token_type {
-                TokenType::Semicolon => {
-                    self.next();
-                    return;
-                }
-                _ => {
-                    if let Some(Token {
-                        token_type:
-                            TokenType::Class
-                            | TokenType::Function
-                            | TokenType::Let
-                            | TokenType::Const
-                            | TokenType::If
-                            | TokenType::While
-                            | TokenType::Print
-                            | TokenType::Return,
-                        ..
-                    }) = self.peek()
-                    {
-                        return;
-                    }
-                }
-            }
-
-            self.next();
-        }
-    }
-
-    fn parse(&mut self) -> ParseResult<Vec<Box<dyn Statement>>> {
-        self.program()
     }
 }
 

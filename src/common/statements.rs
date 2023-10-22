@@ -1,6 +1,6 @@
 use std::{fmt, io::Result};
 
-use super::{expressions::Expression, value::Value};
+use super::{expressions::Expression, token::Token, value::Value};
 
 /*
 statement = block
@@ -23,7 +23,7 @@ pub struct BlockStatement {
 
 pub struct VariableDeclaration {
     pub mutable: bool,
-    pub name: String,
+    pub identifier: Token,
     pub initializer: Option<Box<dyn Expression>>,
 }
 

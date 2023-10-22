@@ -1,7 +1,7 @@
 use core::fmt::{self, Display};
 use std::{error::Error, fmt::Debug};
 
-use crate::common::token::Token;
+use crate::common::token::{Token, TokenType};
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
@@ -9,24 +9,60 @@ pub type ParseResult<T> = Result<T, ParseError>;
 pub enum ParseError {
     Single(Single),
     Multiple(Multiple),
-    UndefinedVariable(UndefinedVariable),
 }
 
 impl ParseError {
-    pub fn new_single(message: &str, token: Option<Token>) -> Self {
-        ParseError::Single(Single::new(message, token))
+    pub fn new_single(message: String) -> Self {
+        ParseError::Single(Single { message })
     }
 
     pub fn new_multiple(errors: Vec<ParseError>) -> Self {
-        ParseError::Multiple(Multiple::new(errors))
+        ParseError::Multiple(Multiple { errors })
     }
 
-    pub fn new_undefined_variable(name: String) -> Self {
-        ParseError::UndefinedVariable(UndefinedVariable::new(name))
+    pub fn new_unexpected_token(token: Token) -> Self {
+        ParseError::Single(Single {
+            message: format!("Unexpected token: {} at line {}", token.value, token.line),
+        })
+    }
+
+    pub fn new_missing_token(missing_token_type: TokenType, after_token: Token) -> Self {
+        ParseError::Single(Single {
+            message: format!(
+                "Expected: {} after {} at line {}",
+                missing_token_type, after_token.value, after_token.line
+            ),
+        })
+    }
+
+    pub fn new_undeclared_variable(token: Token) -> Self {
+        ParseError::Single(Single {
+            message: format!(
+                "Undeclared variable: {} at line {}",
+                token.value, token.line
+            ),
+        })
+    }
+
+    pub fn new_undefined_variable(token: Token) -> Self {
+        ParseError::Single(Single {
+            message: format!("Undefined variable: {} at line {}", token.value, token.line),
+        })
+    }
+
+    pub fn new_immutable_variable(token: Token) -> Self {
+        ParseError::Single(Single {
+            message: format!(
+                "Immutable variable assignment: {} at line {}",
+                token.value, token.line
+            ),
+        })
     }
 
     pub fn new_unexpected_eof() -> Self {
-        ParseError::Single(Single::new_unexpected_eof())
+        ParseError::Single(Single {
+            message: format!("Unexpected end of file"),
+        })
     }
 }
 
@@ -35,7 +71,6 @@ impl Debug for ParseError {
         match self {
             ParseError::Single(err) => write!(f, "{}", err),
             ParseError::Multiple(err) => write!(f, "{}", err),
-            ParseError::UndefinedVariable(err) => write!(f, "{}", err),
         }
     }
 }
@@ -45,7 +80,6 @@ impl Display for ParseError {
         match self {
             ParseError::Single(err) => write!(f, "{}", err),
             ParseError::Multiple(err) => write!(f, "{}", err),
-            ParseError::UndefinedVariable(err) => write!(f, "{}", err),
         }
     }
 }
@@ -55,56 +89,17 @@ impl std::error::Error for ParseError {}
 #[derive(Clone)]
 pub struct Single {
     message: String,
-    token: Option<Token>,
-}
-
-impl Single {
-    pub fn new(message: &str, token: Option<Token>) -> Self {
-        Single {
-            message: message.into(),
-            token,
-        }
-    }
-
-    pub fn new_unexpected_eof() -> Self {
-        Single {
-            message: String::new(),
-            token: None,
-        }
-    }
 }
 
 impl Debug for Single {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match &self.token {
-            Some(Token { value, line, .. }) => {
-                write!(
-                    f,
-                    "\x1b[31mParse error:\x1b[0m {} at line: {} after token: {:?}",
-                    self.message, line, value
-                )
-            }
-            None => {
-                write!(f, "\x1b[31mParse error:\x1b[0m unexpected end of file",)
-            }
-        }
+        write!(f, "\x1b[31mParse error:\x1b[0m {} ", self.message)
     }
 }
 
 impl Display for Single {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match &self.token {
-            Some(Token { value, line, .. }) => {
-                write!(
-                    f,
-                    "\x1b[31mParse error:\x1b[0m {} at line: {} after token: {:?}",
-                    self.message, line, value
-                )
-            }
-            None => {
-                write!(f, "\x1b[31mParse error:\x1b[0m unexpected end of file",)
-            }
-        }
+        write!(f, "\x1b[31mParse error:\x1b[0m {} ", self.message)
     }
 }
 
@@ -113,12 +108,6 @@ impl Error for Single {}
 #[derive(Clone)]
 pub struct Multiple {
     pub errors: Vec<ParseError>,
-}
-
-impl Multiple {
-    pub fn new(errors: Vec<ParseError>) -> Self {
-        Multiple { errors }
-    }
 }
 
 impl Debug for Multiple {
@@ -146,32 +135,3 @@ impl Display for Multiple {
 }
 
 impl Error for Multiple {}
-
-#[derive(Clone)]
-pub struct UndefinedVariable {
-    pub message: String,
-    pub name: String,
-}
-
-impl UndefinedVariable {
-    pub fn new(name: String) -> Self {
-        UndefinedVariable {
-            message: format!("Undefined variable: {}", name),
-            name,
-        }
-    }
-}
-
-impl Debug for UndefinedVariable {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Display for UndefinedVariable {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for UndefinedVariable {}

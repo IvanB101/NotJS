@@ -30,7 +30,7 @@ pub trait Expression {
 }
 
 pub struct AssignmentExpression {
-    pub name: String,
+    pub identifier: Token,
     pub operator: TokenType,
     pub value: Box<dyn Expression>,
 }
@@ -62,8 +62,12 @@ pub struct PostfixExpression {
     pub left: Box<dyn Expression>,
     pub operator: PostfixOperator,
 }
+pub struct Identifier {
+    pub identifier: Token,
+}
 
 pub type Literal = Value;
+
 
 impl fmt::Debug for dyn Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

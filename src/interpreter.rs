@@ -1,7 +1,12 @@
+use lazy_static::lazy_static;
+use std::sync::RwLock;
+
 use std::io::{Error, Result};
 
+use crate::common::expressions::Identifier;
 use crate::{
     common::{
+        environment::Environment,
         expressions::{
             AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Literal,
             PostfixExpression, PostfixOperator, UnaryExpression,
@@ -17,50 +22,30 @@ use crate::{
     parser,
 };
 
+lazy_static! {
+    static ref ENVIRONMENT: RwLock<Environment> = RwLock::new(Environment::new());
+}
+
 // ## Expressions
 impl Expression for AssignmentExpression {
     fn evaluate(&self) -> Result<Value> {
         let value = self.value.evaluate()?;
 
-        match self.operator {
-            TokenType::Equal => {
-                println!("{} = {:?}", self.name, value); // Temporary for debugging
-            }
-            TokenType::PlusEqual => {
-                println!("{} += {:?}", self.name, value); // Temporary for debugging
-            }
-            TokenType::MinusEqual => {
-                println!("{} -= {:?}", self.name, value); // Temporary for debugging
-            }
-            TokenType::StarEqual => {
-                println!("{} *= {:?}", self.name, value); // Temporary for debugging
-            }
-            TokenType::SlashEqual => {
-                println!("{} /= {:?}", self.name, value); // Temporary for debugging
-            }
-            _ => {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Invalid assignment operator",
-                ))
-            }
+        match ENVIRONMENT
+            .write()
+            .unwrap()
+            .assign(self.identifier.clone(), value.clone())
+        {
+            Ok(_) => Ok(value),
+            Err(error) => Err(Error::new(std::io::ErrorKind::InvalidInput, error)),
         }
-
-        Ok(value)
     }
 
     fn node_to_string(&self) -> String {
         format!(
             "{} {} {}",
-            self.name,
-            match self.operator {
-                TokenType::Equal => "=",
-                TokenType::PlusEqual => "+=",
-                TokenType::MinusEqual => "-=",
-                TokenType::StarEqual => "*=",
-                TokenType::SlashEqual => "/=",
-                _ => panic!("Invalid assignment operator"),
-            },
+            self.identifier.value,
+            self.operator,
             self.value.node_to_string()
         )
     }
@@ -217,6 +202,19 @@ impl Expression for PostfixExpression {
     }
 }
 
+impl Expression for Identifier {
+    fn evaluate(&self) -> Result<Value> {
+        match ENVIRONMENT.read().unwrap().get(self.identifier.clone()) {
+            Ok(value) => Ok(value.clone()),
+            Err(error) => Err(Error::new(std::io::ErrorKind::InvalidInput, error)),
+        }
+    }
+
+    fn node_to_string(&self) -> String {
+        self.identifier.value.to_string()
+    }
+}
+
 impl Expression for Literal {
     fn evaluate(&self) -> Result<Value> {
         Ok(self.clone())
@@ -257,21 +255,39 @@ impl Statement for BlockStatement {
 
 impl Statement for VariableDeclaration {
     fn execute(&self) -> Result<Value> {
-        let value = if let Some(ref initializer) = self.initializer {
-            initializer.evaluate()?
-        } else {
-            Value::Null
-        };
-
-        println!("{} = {:?}", self.name, value); // Temporary for debugging
-        Ok(value)
+        match self.initializer {
+            Some(ref initializer) => {
+                let value = initializer.evaluate()?;
+                ENVIRONMENT.write().unwrap().define(
+                    self.identifier.clone(),
+                    Some(value),
+                    self.mutable,
+                );
+                Ok(Value::Null)
+            }
+            None => {
+                ENVIRONMENT
+                    .write()
+                    .unwrap()
+                    .define(self.identifier.clone(), None, self.mutable);
+                Ok(Value::Null)
+            }
+        }
     }
 
     fn node_to_string(&self) -> String {
-        if let Some(ref initializer) = self.initializer {
-            format!("let {} = {};", self.name, initializer.node_to_string())
-        } else {
-            format!("let {};", self.name)
+        match self.initializer {
+            Some(ref initializer) => format!(
+                "{} {} = {};",
+                if self.mutable { "let" } else { "const" },
+                self.identifier.value,
+                initializer.node_to_string()
+            ),
+            None => format!(
+                "{} {};",
+                if self.mutable { "let" } else { "const" },
+                self.identifier.value
+            ),
         }
     }
 }
