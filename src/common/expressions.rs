@@ -1,4 +1,6 @@
-use std::{fmt, io::Result};
+use std::fmt;
+
+use crate::error::runtime::RuntimeResult;
 
 use super::{
     token::{Token, TokenType},
@@ -25,12 +27,12 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
 pub trait Expression {
-    fn evaluate(&self) -> Result<Value>;
+    fn evaluate(&self) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
 }
 
 pub struct AssignmentExpression {
-    pub name: String,
+    pub identifier: Token,
     pub operator: TokenType,
     pub value: Box<dyn Expression>,
 }
@@ -61,6 +63,9 @@ pub enum PostfixOperator {
 pub struct PostfixExpression {
     pub left: Box<dyn Expression>,
     pub operator: PostfixOperator,
+}
+pub struct Identifier {
+    pub identifier: Token,
 }
 
 pub type Literal = Value;
