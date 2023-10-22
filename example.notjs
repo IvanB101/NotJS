@@ -16,10 +16,9 @@ println "";
 
 // A simple console drawing program
 
+let message = "EMAG EHT  TSOL UOY"
 let height = 10
 let width = 50
-
-let message = "YOU LOST  THE GAME"
 
 let x = 0
 while (x < height) {
@@ -28,11 +27,14 @@ while (x < height) {
     if (x == 0 | x == height - 1 | y == 0 | y == width - 1) {
       print "*"
     } else {
-        // print message in the middle
         let midX = height / 2
         let midY = width / 2 - message.length / 2
         if (x == midX - 1 & y == midY - 1) {
-          print message
+          let msgiter = message.length - 1
+          while (msgiter >= 0) {
+            print message[msgiter]
+            msgiter -= 1
+          }
           y = y + message.length - 1
         } else {
           print " "
@@ -43,7 +45,7 @@ while (x < height) {
   println ""
   x += 1
 
-  // Skip one line to make it even
+  // Skip one line at the bottom half to make it even
   if (x == height - 2) {
     x += 1
   }
