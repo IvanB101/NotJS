@@ -34,12 +34,44 @@ impl<'a> Parser<'a> {
     }
 
     fn next(&mut self) -> Option<Token> {
+        loop {
+            if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
+                // println!("Newline");
+            } else {
+                break;
+            }
+        }
+
         self.actual = self._scanner.next();
         self.actual.clone()
     }
 
     fn peek(&mut self) -> Option<&Token> {
+        loop {
+            if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
+                // println!("Newline");
+            } else {
+                break;
+            }
+        }
+
         self._scanner.peek()
+    }
+
+    fn skip(&mut self, ttype: TokenType) -> bool {
+        if let Some(Token { token_type, .. }) = self._scanner.peek() {
+            if *token_type == ttype {
+                self._scanner.next();
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn next_without_skip(&mut self) -> Option<Token> {
+        self.actual = self._scanner.next();
+        self.actual.clone()
     }
 
     fn consume(&mut self, ttype: TokenType) -> Result<Token, ParseError> {
@@ -59,10 +91,11 @@ impl<'a> Parser<'a> {
     }
 
     fn synchronize(&mut self) {
-        while let Some(token) = self.peek() {
+        while let Some(token) = self._scanner.peek() {
             match token.token_type {
-                TokenType::Semicolon => {
-                    self.next();
+                TokenType::Semicolon | TokenType::Newline => {
+                    println!("stop at {}", token.token_type);
+                    self.next_without_skip();
                     return;
                 }
                 _ => {
@@ -84,7 +117,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.next();
+            self.next_without_skip();
         }
     }
 }
@@ -247,7 +280,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.consume(TokenType::Semicolon)?;
+        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(VariableDeclaration {
             mutable,
@@ -259,7 +292,7 @@ impl<'a> Parser<'a> {
     fn expression_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
 
-        self.consume(TokenType::Semicolon)?;
+        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ExpressionStatement { expression }))
     }
@@ -279,7 +312,7 @@ impl<'a> Parser<'a> {
 
         let expression = self.expression()?;
 
-        self.consume(TokenType::Semicolon)?;
+        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(PrintStatement {
             new_line,
@@ -324,12 +357,13 @@ impl<'a> Parser<'a> {
             ..
         }) = self.peek()
         {
+            self.next();
             None
         } else {
             Some(self.expression()?)
         };
 
-        self.consume(TokenType::Semicolon)?;
+        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ReturnStatement { value }))
     }

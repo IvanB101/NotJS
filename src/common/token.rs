@@ -103,6 +103,7 @@ pub enum TokenType {
     Const,
     // Special tokens
     Error,
+    Newline,
 }
 
 impl Display for TokenType {
@@ -161,6 +162,7 @@ impl Display for TokenType {
             TokenType::Let => "Let",
             TokenType::Const => "Const",
             TokenType::Error => "Error",
+            TokenType::Newline => "Newline",
         };
 
         write!(f, "{}", rep)

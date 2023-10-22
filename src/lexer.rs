@@ -21,10 +21,10 @@ impl<'a> Scanner<'a> {
 fn skip_spaces(scanner: &mut Scanner) {
     loop {
         match scanner.source_iter.peek() {
-            Some(10) => {
-                scanner.line += 1;
-                scanner.source_iter.next();
-            }
+            // Some(10) => {
+            //     scanner.line += 1;
+            //     scanner.source_iter.next();
+            // }
             Some(32 | 9 | 13) => {
                 scanner.source_iter.next();
             }
@@ -161,6 +161,14 @@ impl<'a> Iterator for Scanner<'a> {
 
         match self.source_iter.next() {
             Some(chr) => match chr {
+                b'\n' => {
+                    self.line += 1;
+                    Some(Token::new(
+                        TokenType::Newline,
+                        Value::Str("\\n".to_string()),
+                        self.line,
+                    ))
+                }
                 // ### Tokens with value
                 // ## Literals
                 // # Numbers

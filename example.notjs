@@ -1,13 +1,15 @@
-println "Hello World";
-print "new line";
-println " not new line";
+let x = 5
+const y = 6
 
-let x = 5;
-const y = 6;
+let z = x + y
 
-let z = x + y;
+x == 8
+//y = 9
 
-x = 8;
-//y = 9;
+println "z= " + z
 
-println z;
+let i = 1
+while i <= 10 {
+    println i
+    i += 1
+}
