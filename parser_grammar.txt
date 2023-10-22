@@ -40,3 +40,5 @@ argument_list = expression , { "," , expression } ;
 assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
 identifier = letter , { letter | digit | "_" } ;
 literal = NUMBER | STRING | BOOLEAN | NULL ;
+
+(* Pending add variables *)

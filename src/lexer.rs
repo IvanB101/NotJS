@@ -162,11 +162,12 @@ impl<'a> Iterator for Scanner<'a> {
         match self.source_iter.next() {
             Some(chr) => match chr {
                 b'\n' => {
+                    let line = self.line;
                     self.line += 1;
                     Some(Token::new(
                         TokenType::Newline,
                         Value::Str("\\n".to_string()),
-                        self.line,
+                        line,
                     ))
                 }
                 // ### Tokens with value
@@ -586,8 +587,16 @@ mod tests {
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
             Token::new(TokenType::Number, Value::Num(123.0), 1),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 1),
             Token::new(TokenType::Number, Value::Num(456.789), 2),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 2),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 3),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 4),
             Token::new(TokenType::Number, Value::Num(0.1), 5),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 5),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 6),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 7),
+            Token::new(TokenType::Newline, Value::Str("\\n".to_string()), 8),
             Token::new(TokenType::Number, Value::Num(0.2), 9),
         ];
         for expected_token in expected_tokens {
