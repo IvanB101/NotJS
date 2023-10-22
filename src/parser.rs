@@ -34,6 +34,7 @@ impl<'a> Parser<'a> {
     }
 
     fn next(&mut self) -> Option<Token> {
+        // Change to rollback semicolon and newline: remove loop
         loop {
             if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
                 // println!("Newline");
@@ -47,6 +48,7 @@ impl<'a> Parser<'a> {
     }
 
     fn peek(&mut self) -> Option<&Token> {
+        // Change to rollback semicolon and newline: remove loop
         loop {
             if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
                 // println!("Newline");
@@ -58,6 +60,7 @@ impl<'a> Parser<'a> {
         self._scanner.peek()
     }
 
+    // Change to rollback semicolon and newline: remove skip
     fn skip(&mut self, ttype: TokenType) -> bool {
         if let Some(Token { token_type, .. }) = self._scanner.peek() {
             if *token_type == ttype {
@@ -69,11 +72,13 @@ impl<'a> Parser<'a> {
         false
     }
 
+    // Change to rollback semicolon and newline: remove next_without_skip
     fn next_without_skip(&mut self) -> Option<Token> {
         self.actual = self._scanner.next();
         self.actual.clone()
     }
 
+    // Change to rollback semicolon and newline: uncomment consume semicolons from code
     fn consume(&mut self, ttype: TokenType) -> Result<Token, ParseError> {
         match self.peek() {
             Some(Token { token_type, .. }) => {
@@ -90,6 +95,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Change to rollback semicolon and newline: change peek() and next_without_skip() to self.peek() and self.next()
     fn synchronize(&mut self) {
         while let Some(token) = self._scanner.peek() {
             match token.token_type {
@@ -110,7 +116,7 @@ impl<'a> Parser<'a> {
                             | TokenType::Print
                             | TokenType::Return,
                         ..
-                    }) = self.peek()
+                    }) = self._scanner.peek()
                     {
                         return;
                     }
@@ -280,6 +286,7 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Change to rollback semicolon and newline: uncomment
         // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(VariableDeclaration {
@@ -292,6 +299,7 @@ impl<'a> Parser<'a> {
     fn expression_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
 
+        // Change to rollback semicolon and newline: uncomment
         // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ExpressionStatement { expression }))
@@ -312,6 +320,7 @@ impl<'a> Parser<'a> {
 
         let expression = self.expression()?;
 
+        // Change to rollback semicolon and newline: uncomment
         // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(PrintStatement {
@@ -363,6 +372,7 @@ impl<'a> Parser<'a> {
             Some(self.expression()?)
         };
 
+        // Change to rollback semicolon and newline: uncomment
         // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ReturnStatement { value }))
