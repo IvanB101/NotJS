@@ -1,5 +1,4 @@
-use core::fmt::{self, Display};
-use std::{error::Error, fmt::Debug};
+use std::{error::Error, fmt::{Debug, self, Display}};
 
 use crate::common::token::{Token, TokenType};
 
@@ -31,30 +30,6 @@ impl ParseError {
             message: format!(
                 "Expected: {} after {} at line {}",
                 missing_token_type, after_token.value, after_token.line
-            ),
-        })
-    }
-
-    pub fn new_undeclared_variable(token: Token) -> Self {
-        ParseError::Single(Single {
-            message: format!(
-                "Undeclared variable: {} at line {}",
-                token.value, token.line
-            ),
-        })
-    }
-
-    pub fn new_undefined_variable(token: Token) -> Self {
-        ParseError::Single(Single {
-            message: format!("Undefined variable: {} at line {}", token.value, token.line),
-        })
-    }
-
-    pub fn new_immutable_variable(token: Token) -> Self {
-        ParseError::Single(Single {
-            message: format!(
-                "Immutable variable assignment: {} at line {}",
-                token.value, token.line
             ),
         })
     }

@@ -1,6 +1,13 @@
-let i = 1;
+println "Hello World";
+print "new line";
+println " not new line";
 
-while (i <= 10) {
-    println(i);
-    i = i + 1;
-}
+let x = 5;
+const y = 6;
+
+let z = x + y;
+
+x = 8;
+//y = 9;
+
+println z;

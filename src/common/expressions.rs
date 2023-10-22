@@ -1,4 +1,6 @@
-use std::{fmt, io::Result};
+use std::fmt;
+
+use crate::error::runtime::RuntimeResult;
 
 use super::{
     token::{Token, TokenType},
@@ -25,7 +27,7 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
 pub trait Expression {
-    fn evaluate(&self) -> Result<Value>;
+    fn evaluate(&self) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
 }
 
@@ -67,7 +69,6 @@ pub struct Identifier {
 }
 
 pub type Literal = Value;
-
 
 impl fmt::Debug for dyn Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

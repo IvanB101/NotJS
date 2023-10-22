@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::error::parse::{ParseError, ParseResult};
+use crate::error::runtime::{RuntimeError, RuntimeResult};
 
 use super::{token::Token, value::Value};
 
@@ -26,7 +26,7 @@ impl Environment {
             .insert(identifier.value.to_string(), Variable { mutable, value });
     }
 
-    pub fn get(&self, identifier: Token) -> ParseResult<&Value> {
+    pub fn get(&self, identifier: Token) -> RuntimeResult<&Value> {
         let Token { value: name, .. } = identifier.clone();
 
         if self.environment.contains_key(name.to_string().as_str()) {
@@ -35,17 +35,17 @@ impl Environment {
                     if let Some(value) = &variable.value {
                         Ok(value)
                     } else {
-                        Err(ParseError::new_undefined_variable(identifier))
+                        Err(RuntimeError::new_undefined_variable(identifier))
                     }
                 }
-                None => Err(ParseError::new_undefined_variable(identifier)),
+                None => Err(RuntimeError::new_undefined_variable(identifier)),
             }
         } else {
-            Err(ParseError::new_undeclared_variable(identifier))
+            Err(RuntimeError::new_undeclared_variable(identifier))
         }
     }
 
-    pub fn assign(&mut self, identifier: Token, value: Value) -> ParseResult<()> {
+    pub fn assign(&mut self, identifier: Token, value: Value) -> RuntimeResult<()> {
         match self
             .environment
             .get_mut(identifier.value.to_string().as_str())
@@ -55,10 +55,10 @@ impl Environment {
                     variable.value = Some(value);
                     Ok(())
                 } else {
-                    Err(ParseError::new_immutable_variable(identifier))
+                    Err(RuntimeError::new_immutable_variable(identifier))
                 }
             }
-            None => Err(ParseError::new_undefined_variable(identifier)),
+            None => Err(RuntimeError::new_undefined_variable(identifier)),
         }
     }
 }

@@ -1,4 +1,6 @@
-use std::{fmt, io::Result};
+use std::fmt;
+
+use crate::error::runtime::RuntimeResult;
 
 use super::{expressions::Expression, token::Token, value::Value};
 
@@ -13,7 +15,7 @@ statement = block
             | return_statement ;
 */
 pub trait Statement {
-    fn execute(&self) -> Result<Value>;
+    fn execute(&self) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
 }
 

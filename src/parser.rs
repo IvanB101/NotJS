@@ -2,7 +2,6 @@ use std::iter::Peekable;
 
 use crate::{
     common::{
-        environment::Environment,
         expressions::{
             AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Identifier,
             PostfixExpression, PostfixOperator, UnaryExpression,
@@ -19,7 +18,6 @@ use crate::{
 
 struct Parser<'a> {
     actual: Option<Token>,
-    _environment: Environment,
     _scanner: Peekable<Scanner<'a>>,
 }
 
@@ -27,7 +25,6 @@ impl<'a> Parser<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Parser {
             actual: None,
-            _environment: Environment::new(),
             _scanner: Scanner::new(source).peekable(),
         }
     }
