@@ -1,15 +1,52 @@
-let x = 5
-const y = 6
+// Fibonacci sequence with while
 
-let z = x + y
+let a = 0;
+let b = 1;
 
-x == 8
-//y = 9
-
-println "z= " + z
-
-let i = 1
-while i <= 10 {
-    println i
-    i += 1
+let i = 1;
+while (i <= 25) {
+  println "The " + i + " Fibonacci number is " + a + ".";
+  let temp = a;
+  a = b;
+  b = temp + b;
+  i = i + 1;
 }
+println "";
+
+
+// A simple console drawing program
+
+let height = 10
+let width = 50
+
+let message = "YOU LOST  THE GAME"
+
+let x = 0
+while (x < height) {
+  let y = 0
+  while (y < width) {
+    if (x == 0 | x == height - 1 | y == 0 | y == width - 1) {
+      print "*"
+    } else {
+        // print message in the middle
+        let midX = height / 2
+        let midY = width / 2 - message.length / 2
+        if (x == midX - 1 & y == midY - 1) {
+          print message
+          y = y + message.length - 1
+        } else {
+          print " "
+        }
+    }
+    y += 1
+  }
+  println ""
+  x += 1
+
+  // Skip one line to make it even
+  if (x == height - 2) {
+    x += 1
+  }
+}
+
+println ""

@@ -365,6 +365,10 @@ impl Expression for PostfixExpression {
             }
             PostfixOperator::Dot(ref name) => match left {
                 // Value::Object(object) => Ok(object.get(name).unwrap().clone()),
+                Value::Str(string) => match name.as_str() {
+                    "length" => Ok(Value::Num(string.len() as f64)),
+                    _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
+                },
                 _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
             },
             PostfixOperator::Call(ref arguments) => match left {
