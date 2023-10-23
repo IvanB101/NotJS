@@ -68,6 +68,10 @@ pub struct Identifier {
     pub identifier: Token,
 }
 
+pub struct ArrayLiteral {
+    pub elements: Vec<Box<dyn Expression>>,
+}
+
 pub type Literal = Value;
 
 impl fmt::Debug for dyn Expression {

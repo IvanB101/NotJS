@@ -3,8 +3,8 @@ use std::iter::Peekable;
 use crate::{
     common::{
         expressions::{
-            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Identifier,
-            PostfixExpression, PostfixOperator, UnaryExpression,
+            ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
+            Expression, Identifier, PostfixExpression, PostfixOperator, UnaryExpression,
         },
         statements::{
             BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
@@ -646,7 +646,6 @@ impl<'a> Parser<'a> {
                                             token.value
                                         )))
                                     }
-                                    // None => return Err(ParseError::new_unexpected_eof()),
                                     None => break,
                                 }
                             }
@@ -697,6 +696,47 @@ impl<'a> Parser<'a> {
                     self.consume(TokenType::RightParentheses)?;
 
                     Ok(expression)
+                }
+                TokenType::LeftBracket => {
+                    let mut elements = Vec::new();
+
+                    if let Some(Token {
+                        token_type: TokenType::RightBracket,
+                        ..
+                    }) = self.peek()
+                    {
+                        self.next();
+                    } else {
+                        loop {
+                            elements.push(self.expression()?);
+
+                            match self.peek() {
+                                Some(Token {
+                                    token_type: TokenType::RightBracket,
+                                    ..
+                                }) => {
+                                    break;
+                                }
+                                Some(Token {
+                                    token_type: TokenType::Comma,
+                                    ..
+                                }) => {
+                                    self.next();
+                                }
+                                Some(token) => {
+                                    return Err(ParseError::new_single(format!(
+                                        "Expected ']' or ',' after element, found: {}",
+                                        token.value
+                                    )))
+                                }
+                                None => break,
+                            }
+                        }
+
+                        self.consume(TokenType::RightBracket)?;
+                    }
+
+                    Ok(Box::new(ArrayLiteral { elements }))
                 }
                 _ => Err(ParseError::new_single(format!(
                     "Expected identifier, number, string, true, false or '(' after: {} at line {}",

@@ -10,6 +10,7 @@ pub enum Value {
     Number(f64),
     String(String),
     Boolean(bool),
+    Array(Vec<Value>),
 }
 
 impl Value {
@@ -19,6 +20,7 @@ impl Value {
             Value::Number(num) => *num != 0.0,
             Value::String(str) => !str.is_empty(),
             Value::Boolean(bool) => *bool,
+            Value::Array(arr) => !arr.is_empty(),
         }
     }
 }
@@ -30,6 +32,16 @@ impl fmt::Debug for Value {
             Value::Number(num) => write!(f, "{}", num),
             Value::String(str) => write!(f, "\"{}\"", str),
             Value::Boolean(bool) => write!(f, "{}", bool),
+            Value::Array(arr) => {
+                write!(f, "[")?;
+                for (i, val) in arr.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:?}", val)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -41,6 +53,16 @@ impl fmt::Display for Value {
             Value::Number(num) => write!(f, "{}", num),
             Value::String(str) => write!(f, "{}", str),
             Value::Boolean(bool) => write!(f, "{}", bool),
+            Value::Array(arr) => {
+                write!(f, "[")?;
+                for (i, val) in arr.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", val)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
