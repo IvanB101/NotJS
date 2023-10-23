@@ -625,13 +625,13 @@ impl<'a> Parser<'a> {
 
                             loop {
                                 arguments.push(self.expression()?);
+                                println!("{}", self.peek().unwrap().value.to_string());
 
                                 match self.peek() {
                                     Some(Token {
                                         token_type: TokenType::RightParentheses,
                                         ..
                                     }) => {
-                                        self.next();
                                         break;
                                     }
                                     Some(Token {
@@ -646,7 +646,8 @@ impl<'a> Parser<'a> {
                                             token.value
                                         )))
                                     }
-                                    None => return Err(ParseError::new_unexpected_eof()),
+                                    // None => return Err(ParseError::new_unexpected_eof()),
+                                    None => break,
                                 }
                             }
 
@@ -712,4 +713,182 @@ pub fn parse(source: &[u8]) -> ParseResult<Vec<Box<dyn Statement>>> {
     let mut parser = Parser::new(source);
 
     parser.parse()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::common::value::Value;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_identifier() {
+        let source = b"foo";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Identifier {
+            identifier: Token {
+                token_type: TokenType::Identifier,
+                value: Value::String(String::from("foo")),
+                line: 1,
+            },
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_number() {
+        let source = b"42";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Value::Number(42.0))];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_string() {
+        let source = br#""hello, world!""#;
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Value::String(String::from("hello, world!")))];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_true() {
+        let source = b"true";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Value::Boolean(true))];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_false() {
+        let source = b"false";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Value::Boolean(false))];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_parentheses() {
+        let source = b"(42)";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(Value::Number(42.0))];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_call() {
+        let source = b"foo(42, \"hello\")";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(PostfixExpression {
+            left: Box::new(Identifier {
+                identifier: Token {
+                    token_type: TokenType::Identifier,
+                    value: Value::String(String::from("foo")),
+                    line: 1,
+                },
+            }),
+            operator: PostfixOperator::Call(vec![
+                Box::new(Value::Number(42.0)),
+                Box::new(Value::String(String::from("hello"))),
+            ]),
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_index() {
+        let source = b"foo[42]";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(PostfixExpression {
+            left: Box::new(Identifier {
+                identifier: Token {
+                    token_type: TokenType::Identifier,
+                    value: Value::String(String::from("foo")),
+                    line: 1,
+                },
+            }),
+            operator: PostfixOperator::Index(Box::new(Value::Number(42.0))),
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_dot() {
+        let source = b"foo.bar";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(PostfixExpression {
+            left: Box::new(Identifier {
+                identifier: Token {
+                    token_type: TokenType::Identifier,
+                    value: Value::String(String::from("foo")),
+                    line: 1,
+                },
+            }),
+            operator: PostfixOperator::Dot(String::from("bar")),
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_minus() {
+        let source = b"-42";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(UnaryExpression {
+            operator: Token {
+                token_type: TokenType::Minus,
+                value: Value::String(String::from("-")),
+                line: 1,
+            },
+            right: Box::new(Value::Number(42.0)),
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string())
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_not() {
+        let source = b"!true";
+        let statements = parse(source).unwrap();
+        let expected = vec![Box::new(UnaryExpression {
+            operator: Token {
+                token_type: TokenType::Bang,
+                value: Value::String(String::from("!")),
+                line: 1,
+            },
+            right: Box::new(Value::Boolean(true)),
+        })];
+
+        for (i, statement) in statements.iter().enumerate() {
+            assert_eq!(*statement.node_to_string(), expected[i].node_to_string())
+        }
+    }
 }
