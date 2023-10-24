@@ -27,6 +27,7 @@ pub struct VariableDeclaration {
     pub mutable: bool,
     pub identifier: Token,
     pub initializer: Option<Box<dyn Expression>>,
+    pub scope: usize,
 }
 
 pub struct ExpressionStatement {
