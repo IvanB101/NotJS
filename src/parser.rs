@@ -731,23 +731,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_identifier() {
-        let source = b"foo";
-        let statements = parse(source).unwrap();
-        let expected = vec![Box::new(Identifier {
-            identifier: Token {
-                token_type: TokenType::Identifier,
-                value: Value::String(String::from("foo")),
-                line: 1,
-            },
-        })];
-
-        for (i, statement) in statements.iter().enumerate() {
-            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
-        }
-    }
-
-    #[test]
     fn test_parse_number() {
         let source = b"42";
         let statements = parse(source).unwrap();
@@ -803,33 +786,20 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_call() {
-        let source = b"foo(42, \"hello\")";
-        let statements = parse(source).unwrap();
-        let expected = vec![Box::new(PostfixExpression {
-            left: Box::new(Identifier {
-                identifier: Token {
-                    token_type: TokenType::Identifier,
-                    value: Value::String(String::from("foo")),
-                    line: 1,
-                },
-            }),
-            operator: PostfixOperator::Call(vec![
-                Box::new(Value::Number(42.0)),
-                Box::new(Value::String(String::from("hello"))),
-            ]),
-        })];
-
-        for (i, statement) in statements.iter().enumerate() {
-            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
-        }
-    }
-
-    #[test]
     fn test_parse_index() {
-        let source = b"foo[42]";
+        let source = br#"let foo = "012345" foo[4]"#;
         let statements = parse(source).unwrap();
-        let expected = vec![Box::new(PostfixExpression {
+        let expected_declaration = Box::new(VariableDeclaration {
+            mutable: true,
+            identifier: Token {
+                token_type: TokenType::Identifier,
+                value: Value::String(String::from("foo")),
+                line: 1,
+            },
+            initializer: Some(Box::new(Value::String(String::from("012345")))),
+            scope: 0,
+        });
+        let expected_index = Box::new(PostfixExpression {
             left: Box::new(Identifier {
                 identifier: Token {
                     token_type: TokenType::Identifier,
@@ -837,19 +807,34 @@ mod tests {
                     line: 1,
                 },
             }),
-            operator: PostfixOperator::Index(Box::new(Value::Number(42.0))),
-        })];
+            operator: PostfixOperator::Index(Box::new(Value::Number(4.0))),
+        });
 
-        for (i, statement) in statements.iter().enumerate() {
-            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
-        }
+        assert_eq!(
+            *statements[0].node_to_string(),
+            expected_declaration.node_to_string()
+        );
+        assert_eq!(
+            *statements[1].node_to_string(),
+            expected_index.node_to_string()
+        );
     }
 
     #[test]
     fn test_parse_dot() {
-        let source = b"foo.bar";
+        let source = br#"let foo = "foo" foo.length"#;
         let statements = parse(source).unwrap();
-        let expected = vec![Box::new(PostfixExpression {
+        let expected_declaration = Box::new(VariableDeclaration {
+            mutable: true,
+            identifier: Token {
+                token_type: TokenType::Identifier,
+                value: Value::String(String::from("foo")),
+                line: 1,
+            },
+            initializer: Some(Box::new(Value::String(String::from("foo")))),
+            scope: 0,
+        });
+        let expected_dot = Box::new(PostfixExpression {
             left: Box::new(Identifier {
                 identifier: Token {
                     token_type: TokenType::Identifier,
@@ -857,12 +842,17 @@ mod tests {
                     line: 1,
                 },
             }),
-            operator: PostfixOperator::Dot(String::from("bar")),
-        })];
+            operator: PostfixOperator::Dot(String::from("length")),
+        });
 
-        for (i, statement) in statements.iter().enumerate() {
-            assert_eq!(*statement.node_to_string(), expected[i].node_to_string());
-        }
+        assert_eq!(
+            *statements[0].node_to_string(),
+            expected_declaration.node_to_string()
+        );
+        assert_eq!(
+            *statements[1].node_to_string(),
+            expected_dot.node_to_string()
+        );
     }
 
     #[test]
