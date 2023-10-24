@@ -56,7 +56,6 @@ pub enum TokenType {
     Dot,
     QuestionMark,
     Colon,
-    Semicolon,
     // One or two character tokens.
     Plus,
     PlusEqual,
@@ -103,7 +102,6 @@ pub enum TokenType {
     Const,
     // Special tokens
     Error,
-    Newline,
 }
 
 impl Display for TokenType {
@@ -119,7 +117,6 @@ impl Display for TokenType {
             TokenType::Dot => ".",
             TokenType::QuestionMark => "?",
             TokenType::Colon => ":",
-            TokenType::Semicolon => ";",
             TokenType::Plus => "+",
             TokenType::PlusEqual => "+=",
             TokenType::Minus => "-",
@@ -162,7 +159,6 @@ impl Display for TokenType {
             TokenType::Let => "Let",
             TokenType::Const => "Const",
             TokenType::Error => "Error",
-            TokenType::Newline => "Newline",
         };
 
         write!(f, "{}", rep)

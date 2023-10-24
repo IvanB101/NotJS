@@ -9,12 +9,12 @@ statement = block
             | while_statement
             | return_statement ;
 block = "{" , { statement } , "}" ;
-variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] , ";" ;
-expression_statement = expression , ";" ;
-print_statement = "print" , expression , ";" ;
+variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] ;
+expression_statement = expression ;
+print_statement = "print" , expression ;
 if_statement = "if" , "(" , expression , ")" , statement , [ "else" , statement ] ;
 while_statement = "while" , "(" , expression , ")" , statement ;
-return_statement = "return" , [ expression ] , ";" ;
+return_statement = "return" , [ expression ] ;
 
 (* Expression *)
 expression = assignment_expression ;
@@ -39,6 +39,6 @@ primary_expression = identifier | literal | "(" , expression , ")" ;
 argument_list = expression , { "," , expression } ;
 assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
 identifier = letter , { letter | digit | "_" } ;
-literal = NUMBER | STRING | BOOLEAN | NULL ;
+literal = NUMBER | STRING | BOOLEAN | ARRAY | NULL ;
 
 (* Pending add variables *)

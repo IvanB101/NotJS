@@ -1,7 +1,8 @@
 use lazy_static::lazy_static;
 use std::sync::RwLock;
 
-use crate::common::expressions::Identifier;
+use crate::common::expressions::{ArrayLiteral, Identifier};
+use crate::common::token::Token;
 use crate::error::generic::GenericResult;
 use crate::error::runtime::{RuntimeError, RuntimeResult};
 use crate::{
@@ -354,12 +355,20 @@ impl Expression for PostfixExpression {
                             return Err(RuntimeError::new("Invalid index operator".to_string()));
                         }
                     }
-                    // Value::List(list) => {
-                    //     let index = index.as_num()?;
-                    //     let index = index as usize;
-                    //     let index = index % list.len();
-                    //     Ok(list[index].clone())
-                    // }
+                    Value::Array(array) => {
+                        if let Value::Number(num) = index {
+                            let index = num;
+                            // if the number its negative, we start from the end of the array
+                            let index = if index < 0.0 {
+                                array.len() - index.abs() as usize
+                            } else {
+                                index as usize
+                            };
+                            Ok(array[index].clone())
+                        } else {
+                            return Err(RuntimeError::new("Invalid index operator".to_string()));
+                        }
+                    }
                     _ => Err(RuntimeError::new("Invalid index operator".to_string())),
                 }
             }
@@ -367,6 +376,10 @@ impl Expression for PostfixExpression {
                 // Value::Object(object) => Ok(object.get(name).unwrap().clone()),
                 Value::String(string) => match name.as_str() {
                     "length" => Ok(Value::Number(string.len() as f64)),
+                    _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
+                },
+                Value::Array(array) => match name.as_str() {
+                    "length" => Ok(Value::Number(array.len() as f64)),
                     _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
                 },
                 _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
@@ -411,6 +424,37 @@ impl Expression for Identifier {
     fn node_to_string(&self) -> String {
         self.identifier.value.to_string()
     }
+
+    fn is_identifier(&self) -> Option<Token> {
+        Some(self.identifier.clone())
+    }
+}
+
+impl Expression for ArrayLiteral {
+    fn evaluate(&self) -> RuntimeResult<Value> {
+        let mut result = Vec::new();
+
+        for element in &self.elements {
+            result.push(element.evaluate()?);
+        }
+
+        Ok(Value::Array(result))
+    }
+
+    fn node_to_string(&self) -> String {
+        let mut result = "[".to_string();
+
+        for (i, element) in self.elements.iter().enumerate() {
+            if i != 0 {
+                result += ", ";
+            }
+            result += &element.node_to_string();
+        }
+
+        result += "]";
+
+        result
+    }
 }
 
 impl Expression for Literal {
@@ -424,6 +468,17 @@ impl Expression for Literal {
             Value::String(ref string) => "\"".to_string() + string + "\"",
             Value::Boolean(boolean) => boolean.to_string(),
             Value::Null => "null".to_string(),
+            Value::Array(ref array) => {
+                let mut result = "[".to_string();
+                for (i, value) in array.iter().enumerate() {
+                    if i != 0 {
+                        result += ", ";
+                    }
+                    result += &value.node_to_string();
+                }
+                result += "]";
+                result
+            }
         }
     }
 }

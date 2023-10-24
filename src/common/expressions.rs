@@ -29,6 +29,9 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 pub trait Expression {
     fn evaluate(&self) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
+    fn is_identifier(&self) -> Option<Token> {
+        None
+    }
 }
 
 pub struct AssignmentExpression {
@@ -66,6 +69,10 @@ pub struct PostfixExpression {
 }
 pub struct Identifier {
     pub identifier: Token,
+}
+
+pub struct ArrayLiteral {
+    pub elements: Vec<Box<dyn Expression>>,
 }
 
 pub type Literal = Value;

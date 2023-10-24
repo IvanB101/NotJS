@@ -3,8 +3,8 @@ use std::iter::Peekable;
 use crate::{
     common::{
         expressions::{
-            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Identifier,
-            PostfixExpression, PostfixOperator, UnaryExpression,
+            ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
+            Expression, Identifier, PostfixExpression, PostfixOperator, UnaryExpression,
         },
         statements::{
             BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
@@ -34,51 +34,14 @@ impl<'a> Parser<'a> {
     }
 
     fn next(&mut self) -> Option<Token> {
-        // Change to rollback semicolon and newline: remove loop
-        loop {
-            if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
-                // println!("Newline");
-            } else {
-                break;
-            }
-        }
-
         self.actual = self._scanner.next();
         self.actual.clone()
     }
 
     fn peek(&mut self) -> Option<&Token> {
-        // Change to rollback semicolon and newline: remove loop
-        loop {
-            if self.skip(TokenType::Newline) || self.skip(TokenType::Semicolon) {
-                // println!("Newline");
-            } else {
-                break;
-            }
-        }
-
         self._scanner.peek()
     }
 
-    // Change to rollback semicolon and newline: remove skip
-    fn skip(&mut self, ttype: TokenType) -> bool {
-        if let Some(Token { token_type, .. }) = self._scanner.peek() {
-            if *token_type == ttype {
-                self._scanner.next();
-                return true;
-            }
-        }
-
-        false
-    }
-
-    // Change to rollback semicolon and newline: remove next_without_skip
-    fn next_without_skip(&mut self) -> Option<Token> {
-        self.actual = self._scanner.next();
-        self.actual.clone()
-    }
-
-    // Change to rollback semicolon and newline: uncomment consume semicolons from code
     fn consume(&mut self, ttype: TokenType) -> Result<Token, ParseError> {
         match self.peek() {
             Some(Token { token_type, .. }) => {
@@ -95,15 +58,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Change to rollback semicolon and newline: change peek() and next_without_skip() to self.peek() and self.next()
     fn synchronize(&mut self) {
         while let Some(token) = self._scanner.peek() {
             match token.token_type {
-                TokenType::Semicolon | TokenType::Newline => {
-                    println!("stop at {}", token.token_type);
-                    self.next_without_skip();
-                    return;
-                }
+                // TokenType::Semicolon | TokenType::Newline => {
+                //     println!("stop at {}", token.token_type);
+                //     self.next();
+                //     return;
+                // }
                 _ => {
                     if let Some(Token {
                         token_type:
@@ -123,7 +85,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.next_without_skip();
+            self.next();
         }
     }
 }
@@ -286,9 +248,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // Change to rollback semicolon and newline: uncomment
-        // self.consume(TokenType::Semicolon)?;
-
         Ok(Box::new(VariableDeclaration {
             mutable,
             identifier,
@@ -298,9 +257,6 @@ impl<'a> Parser<'a> {
 
     fn expression_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let expression = self.expression()?;
-
-        // Change to rollback semicolon and newline: uncomment
-        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(ExpressionStatement { expression }))
     }
@@ -319,9 +275,6 @@ impl<'a> Parser<'a> {
         };
 
         let expression = self.expression()?;
-
-        // Change to rollback semicolon and newline: uncomment
-        // self.consume(TokenType::Semicolon)?;
 
         Ok(Box::new(PrintStatement {
             new_line,
@@ -362,7 +315,7 @@ impl<'a> Parser<'a> {
 
     fn return_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
         let value = if let Some(Token {
-            token_type: TokenType::Semicolon,
+            token_type: TokenType::Null,
             ..
         }) = self.peek()
         {
@@ -372,9 +325,6 @@ impl<'a> Parser<'a> {
             Some(self.expression()?)
         };
 
-        // Change to rollback semicolon and newline: uncomment
-        // self.consume(TokenType::Semicolon)?;
-
         Ok(Box::new(ReturnStatement { value }))
     }
 
@@ -383,16 +333,6 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
-        let identifier = if let Some(Token {
-            token_type: TokenType::Identifier,
-            ..
-        }) = self.peek()
-        {
-            self.peek().cloned()
-        } else {
-            None
-        };
-
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -405,14 +345,24 @@ impl<'a> Parser<'a> {
             ..
         }) = self.peek()
         {
-            let operator = self.next().unwrap().token_type;
-            let value = self.assignment_expression()?;
+            if let Some(identifier) = expression.is_identifier() {
+                let operator = self.next().unwrap().token_type;
+                let value = self.assignment_expression()?;
 
-            expression = Box::new(AssignmentExpression {
-                identifier: identifier.unwrap(),
-                operator,
-                value,
-            })
+                expression = Box::new(AssignmentExpression {
+                    identifier: identifier,
+                    operator,
+                    value,
+                })
+            } else {
+                let Token {
+                    token_type, line, ..
+                } = self.next().unwrap();
+                return Err(ParseError::new_single(format!(
+                    "Expected identifier before {} at line {}",
+                    token_type, line
+                )));
+            }
         }
 
         Ok(expression)
@@ -618,7 +568,6 @@ impl<'a> Parser<'a> {
 
                     let arguments = if let Some(token) = self.peek() {
                         if token.token_type == TokenType::RightParentheses {
-                            self.next();
                             None
                         } else {
                             let mut arguments = Vec::new();
@@ -646,7 +595,6 @@ impl<'a> Parser<'a> {
                                             token.value
                                         )))
                                     }
-                                    // None => return Err(ParseError::new_unexpected_eof()),
                                     None => break,
                                 }
                             }
@@ -697,6 +645,47 @@ impl<'a> Parser<'a> {
                     self.consume(TokenType::RightParentheses)?;
 
                     Ok(expression)
+                }
+                TokenType::LeftBracket => {
+                    let mut elements = Vec::new();
+
+                    if let Some(Token {
+                        token_type: TokenType::RightBracket,
+                        ..
+                    }) = self.peek()
+                    {
+                        self.next();
+                    } else {
+                        loop {
+                            elements.push(self.expression()?);
+
+                            match self.peek() {
+                                Some(Token {
+                                    token_type: TokenType::RightBracket,
+                                    ..
+                                }) => {
+                                    break;
+                                }
+                                Some(Token {
+                                    token_type: TokenType::Comma,
+                                    ..
+                                }) => {
+                                    self.next();
+                                }
+                                Some(token) => {
+                                    return Err(ParseError::new_single(format!(
+                                        "Expected ']' or ',' after element, found: {}",
+                                        token.value
+                                    )))
+                                }
+                                None => break,
+                            }
+                        }
+
+                        self.consume(TokenType::RightBracket)?;
+                    }
+
+                    Ok(Box::new(ArrayLiteral { elements }))
                 }
                 _ => Err(ParseError::new_single(format!(
                     "Expected identifier, number, string, true, false or '(' after: {} at line {}",

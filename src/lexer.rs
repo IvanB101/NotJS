@@ -12,20 +12,26 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Scanner {
-            source_iter: source.iter().peekable(), // .peekable() .enumerate()
+            source_iter: source.iter().peekable(),
             line: 1,
         }
     }
 }
 
-fn skip_spaces(scanner: &mut Scanner) {
+fn skip_characters(scanner: &mut Scanner) {
     loop {
         match scanner.source_iter.peek() {
-            // Some(10) => {
-            //     scanner.line += 1;
-            //     scanner.source_iter.next();
-            // }
+            // Newline
+            Some(10) => {
+                scanner.line += 1;
+                scanner.source_iter.next();
+            }
+            // Whitespace
             Some(32 | 9 | 13) => {
+                scanner.source_iter.next();
+            }
+            // Semicolon
+            Some(59) => {
                 scanner.source_iter.next();
             }
             _ => break,
@@ -161,19 +167,10 @@ impl<'a> Iterator for Scanner<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Token> {
-        skip_spaces(self);
+        skip_characters(self);
 
         match self.source_iter.next() {
             Some(chr) => match chr {
-                b'\n' => {
-                    let line = self.line;
-                    self.line += 1;
-                    Some(Token::new(
-                        TokenType::Newline,
-                        Value::String("\\n".to_string()),
-                        line,
-                    ))
-                }
                 // ### Tokens with value
                 // ## Literals
                 // # Numbers
@@ -245,11 +242,6 @@ impl<'a> Iterator for Scanner<'a> {
                 b':' => Some(Token::new(
                     TokenType::Colon,
                     Value::String(":".to_string()),
-                    self.line,
-                )),
-                b';' => Some(Token::new(
-                    TokenType::Semicolon,
-                    Value::String(";".to_string()),
                     self.line,
                 )),
                 // ## One or Two character tokens
@@ -411,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_lexing_single_character_tokens() {
-        let source = b"+-*/(){}[],.;";
+        let source = b"+-*/(){}[],.";
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
             Token::new(TokenType::Plus, Value::String("+".to_string()), 1),
@@ -434,7 +426,6 @@ mod tests {
             Token::new(TokenType::RightBracket, Value::String("]".to_string()), 1),
             Token::new(TokenType::Comma, Value::String(",".to_string()), 1),
             Token::new(TokenType::Dot, Value::String(".".to_string()), 1),
-            Token::new(TokenType::Semicolon, Value::String(";".to_string()), 1),
         ];
         for expected_token in expected_tokens {
             assert_eq!(lexer.next(), Some(expected_token));
@@ -607,16 +598,8 @@ mod tests {
         let mut lexer = Scanner::new(source);
         let expected_tokens = vec![
             Token::new(TokenType::Number, Value::Number(123.0), 1),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 1),
             Token::new(TokenType::Number, Value::Number(456.789), 2),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 2),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 3),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 4),
             Token::new(TokenType::Number, Value::Number(0.1), 5),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 5),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 6),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 7),
-            Token::new(TokenType::Newline, Value::String("\\n".to_string()), 8),
             Token::new(TokenType::Number, Value::Number(0.2), 9),
         ];
         for expected_token in expected_tokens {
