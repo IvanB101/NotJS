@@ -31,9 +31,13 @@ impl Statement for BlockStatement {
     fn execute(&self) -> RuntimeResult<Value> {
         let mut result = Value::Null;
 
+        ENVIRONMENT.write().unwrap().push();
+
         for statement in &self.statements {
             result = statement.execute()?;
         }
+
+        ENVIRONMENT.write().unwrap().pop();
 
         Ok(result)
     }
