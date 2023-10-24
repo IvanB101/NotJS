@@ -1,4 +1,7 @@
-use std::{error::Error, fmt::{Debug, self, Display}};
+use std::{
+    error::Error,
+    fmt::{self, Debug, Display},
+};
 
 use crate::common::token::{Token, TokenType};
 
@@ -17,12 +20,6 @@ impl ParseError {
 
     pub fn new_multiple(errors: Vec<ParseError>) -> Self {
         ParseError::Multiple(Multiple { errors })
-    }
-
-    pub fn new_unexpected_token(token: Token) -> Self {
-        ParseError::Single(Single {
-            message: format!("Unexpected token: {} at line {}", token.value, token.line),
-        })
     }
 
     pub fn new_missing_token(missing_token_type: TokenType, after_token: Token) -> Self {

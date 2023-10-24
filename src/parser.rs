@@ -708,7 +708,7 @@ impl<'a> Parser<'a> {
                     Ok(Box::new(ArrayLiteral { elements }))
                 }
                 _ => Err(ParseError::new_single(format!(
-                    "Expected identifier, number, string, true, false or '(' after: {} at line {}",
+                    "Expected identifier, number, string, true, false or '(', found: {:?} at line {}",
                     value, line
                 ))),
             }
