@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use std::sync::RwLock;
 
 use crate::common::expressions::{ArrayLiteral, Identifier};
+use crate::common::token::Token;
 use crate::error::generic::GenericResult;
 use crate::error::runtime::{RuntimeError, RuntimeResult};
 use crate::{
@@ -422,6 +423,10 @@ impl Expression for Identifier {
 
     fn node_to_string(&self) -> String {
         self.identifier.value.to_string()
+    }
+
+    fn is_identifier(&self) -> Option<Token> {
+        Some(self.identifier.clone())
     }
 }
 

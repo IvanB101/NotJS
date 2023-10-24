@@ -333,8 +333,6 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment_expression(&mut self) -> ParseResult<Box<dyn Expression>> {
-        let identifier = self.peek().cloned();
-
         let mut expression = self.conditional_expression()?;
 
         if let Some(Token {
@@ -347,25 +345,24 @@ impl<'a> Parser<'a> {
             ..
         }) = self.peek()
         {
-            if let Some(Token {
-                token_type: TokenType::Identifier,
-                ..
-            }) = identifier
-            {
+            if let Some(identifier) = expression.is_identifier() {
+                let operator = self.next().unwrap().token_type;
+                let value = self.assignment_expression()?;
+
+                expression = Box::new(AssignmentExpression {
+                    identifier: identifier,
+                    operator,
+                    value,
+                })
             } else {
+                let Token {
+                    token_type, line, ..
+                } = self.next().unwrap();
                 return Err(ParseError::new_single(format!(
-                    "Expected identifier before assignment operator, found: {}",
-                    identifier.unwrap().value
+                    "Expected identifier before {} at line {}",
+                    token_type, line
                 )));
             }
-            let operator = self.next().unwrap().token_type;
-            let value = self.assignment_expression()?;
-
-            expression = Box::new(AssignmentExpression {
-                identifier: identifier.unwrap(),
-                operator,
-                value,
-            })
         }
 
         Ok(expression)

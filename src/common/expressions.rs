@@ -29,6 +29,9 @@ literal = NUMBER | STRING | BOOLEAN | NULL ;
 pub trait Expression {
     fn evaluate(&self) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
+    fn is_identifier(&self) -> Option<Token> {
+        None
+    }
 }
 
 pub struct AssignmentExpression {
