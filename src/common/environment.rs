@@ -5,7 +5,7 @@ use crate::error::runtime::{RuntimeError, RuntimeResult};
 use super::{token::Token, value::Value};
 
 pub struct Environment {
-    pub environment: HashMap<String, Variable>,
+    pub environment: Vec<HashMap<String, Variable>>,
 }
 
 #[derive(Clone, Debug)]
@@ -17,48 +17,47 @@ pub struct Variable {
 impl Environment {
     pub fn new() -> Self {
         Self {
-            environment: HashMap::new(),
+            environment: vec![HashMap::new()],
         }
+    }
+
+    pub fn push(&mut self) {
+        self.environment.push(HashMap::new());
+    }
+
+    pub fn pop(&mut self) {
+        self.environment.pop();
     }
 
     pub fn define(&mut self, identifier: Token, value: Option<Value>, mutable: bool) {
         self.environment
+            .last_mut()
+            .unwrap()
             .insert(identifier.value.to_string(), Variable { mutable, value });
     }
 
-    pub fn get(&self, identifier: Token) -> RuntimeResult<&Value> {
-        let Token { value: name, .. } = identifier.clone();
-
-        if self.environment.contains_key(name.to_string().as_str()) {
-            match self.environment.get(name.to_string().as_str()) {
-                Some(variable) => {
-                    if let Some(value) = &variable.value {
-                        Ok(value)
-                    } else {
-                        Err(RuntimeError::new_undefined_variable(identifier))
-                    }
+    pub fn assign(&mut self, identifier: Token, value: Value) -> RuntimeResult<()> {
+        for scope in self.environment.iter_mut().rev() {
+            if let Some(variable) = scope.get_mut(identifier.value.to_string().as_str()) {
+                if !variable.mutable {
+                    return Err(RuntimeError::new_immutable_variable(identifier));
                 }
-                None => Err(RuntimeError::new_undefined_variable(identifier)),
+                variable.value = Some(value);
+                return Ok(());
             }
-        } else {
-            Err(RuntimeError::new_undeclared_variable(identifier))
         }
+        Err(RuntimeError::new_undeclared_variable(identifier))
     }
 
-    pub fn assign(&mut self, identifier: Token, value: Value) -> RuntimeResult<()> {
-        match self
-            .environment
-            .get_mut(identifier.value.to_string().as_str())
-        {
-            Some(variable) => {
-                if variable.mutable {
-                    variable.value = Some(value);
-                    Ok(())
-                } else {
-                    Err(RuntimeError::new_immutable_variable(identifier))
+    pub fn get(&self, identifier: Token) -> RuntimeResult<&Value> {
+        for scope in self.environment.iter().rev() {
+            if let Some(variable) = scope.get(identifier.value.to_string().as_str()) {
+                if let Some(value) = &variable.value {
+                    return Ok(value);
                 }
+                return Err(RuntimeError::new_undefined_variable(identifier));
             }
-            None => Err(RuntimeError::new_undefined_variable(identifier)),
         }
+        Err(RuntimeError::new_undeclared_variable(identifier))
     }
 }

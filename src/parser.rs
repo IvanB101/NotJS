@@ -6,6 +6,7 @@ use crate::{
             ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
             Expression, Identifier, PostfixExpression, PostfixOperator, UnaryExpression,
         },
+        resolver::Resolver,
         statements::{
             BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
             Statement, VariableDeclaration, WhileStatement,
@@ -19,6 +20,7 @@ use crate::{
 struct Parser<'a> {
     actual: Option<Token>,
     _scanner: Peekable<Scanner<'a>>,
+    resolver: Resolver,
 }
 
 impl<'a> Parser<'a> {
@@ -26,6 +28,7 @@ impl<'a> Parser<'a> {
         Parser {
             actual: None,
             _scanner: Scanner::new(source).peekable(),
+            resolver: Resolver::new(),
         }
     }
 
@@ -76,7 +79,8 @@ impl<'a> Parser<'a> {
                             | TokenType::If
                             | TokenType::While
                             | TokenType::Print
-                            | TokenType::Return,
+                            | TokenType::Return
+                            | TokenType::LeftBrace,
                         ..
                     }) = self._scanner.peek()
                     {
@@ -194,9 +198,12 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
+        self.resolver.push();
+
         while let Some(token) = self.peek() {
             if token.token_type == TokenType::RightBrace {
                 self.next();
+                self.resolver.pop();
                 break;
             }
 
@@ -237,6 +244,8 @@ impl<'a> Parser<'a> {
 
         let identifier = self.consume(TokenType::Identifier)?;
 
+        let scope = self.resolver.declare(identifier.clone(), mutable);
+
         let initializer = if let Some(Token {
             token_type: TokenType::Equal,
             ..
@@ -252,6 +261,7 @@ impl<'a> Parser<'a> {
             mutable,
             identifier,
             initializer,
+            scope,
         }))
     }
 
@@ -346,13 +356,15 @@ impl<'a> Parser<'a> {
         }) = self.peek()
         {
             if let Some(identifier) = expression.is_identifier() {
+                let scope = self.resolver.define(identifier.clone())?;
                 let operator = self.next().unwrap().token_type;
                 let value = self.assignment_expression()?;
 
                 expression = Box::new(AssignmentExpression {
-                    identifier: identifier,
+                    identifier,
                     operator,
                     value,
+                    scope,
                 })
             } else {
                 let Token {
@@ -629,13 +641,21 @@ impl<'a> Parser<'a> {
         }) = self.next()
         {
             match token_type {
-                TokenType::Identifier => Ok(Box::new(Identifier {
-                    identifier: Token {
+                TokenType::Identifier => {
+                    self.resolver.resolve(Token {
                         token_type,
-                        value,
+                        value: value.clone(),
                         line,
-                    },
-                })),
+                    })?;
+
+                    Ok(Box::new(Identifier {
+                        identifier: Token {
+                            token_type,
+                            value,
+                            line,
+                        },
+                    }))
+                }
                 TokenType::Number | TokenType::String | TokenType::True | TokenType::False => {
                     Ok(Box::new(value))
                 }

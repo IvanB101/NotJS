@@ -31,9 +31,13 @@ impl Statement for BlockStatement {
     fn execute(&self) -> RuntimeResult<Value> {
         let mut result = Value::Null;
 
+        ENVIRONMENT.write().unwrap().push();
+
         for statement in &self.statements {
             result = statement.execute()?;
         }
+
+        ENVIRONMENT.write().unwrap().pop();
 
         Ok(result)
     }
@@ -301,8 +305,20 @@ impl Expression for BinaryExpression {
             TokenType::GreaterEqual => Ok(Value::Boolean(left >= right)),
             TokenType::Less => Ok(Value::Boolean(left < right)),
             TokenType::LessEqual => Ok(Value::Boolean(left <= right)),
-            TokenType::And => Ok(Value::Boolean(left.is_truthy() && right.is_truthy())),
-            TokenType::Or => Ok(Value::Boolean(left.is_truthy() || right.is_truthy())),
+            TokenType::And => {
+                if left.is_truthy() {
+                    Ok(right)
+                } else {
+                    Ok(left)
+                }
+            }
+            TokenType::Or => {
+                if left.is_truthy() {
+                    Ok(left)
+                } else {
+                    Ok(right)
+                }
+            }
             _ => Err(RuntimeError::new("Invalid binary operator".to_string())),
         }
     }

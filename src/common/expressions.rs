@@ -38,6 +38,7 @@ pub struct AssignmentExpression {
     pub identifier: Token,
     pub operator: TokenType,
     pub value: Box<dyn Expression>,
+    pub scope: usize,
 }
 
 pub struct ConditionalExpression {
