@@ -5,8 +5,13 @@ use crate::error::parse::{ParseError, ParseResult};
 
 use super::token::Token;
 
+struct Variable {
+    mutable: bool,
+    defined: bool,
+}
+
 pub struct Resolver {
-    scopes: Vec<HashMap<String, bool>>,
+    scopes: Vec<HashMap<String, Variable>>,
 }
 
 impl Resolver {
@@ -24,11 +29,11 @@ impl Resolver {
         self.scopes.pop();
     }
 
-    pub fn declare(&mut self, identifier: Token, mutable: bool) -> usize {
+    pub fn declare(&mut self, identifier: Token, mutable: bool, defined: bool) -> usize {
         self.scopes
             .last_mut()
             .unwrap()
-            .insert(identifier.value.to_string(), mutable);
+            .insert(identifier.value.to_string(), Variable { mutable, defined });
 
         self.scopes.len() - 1
     }
@@ -38,7 +43,7 @@ impl Resolver {
         for (index, scope) in self.scopes.iter().enumerate().rev() {
             if scope.contains_key(identifier.value.to_string().as_str()) {
                 if let Some(mutable) = scope.get(identifier.value.to_string().as_str()) {
-                    if *mutable {
+                    if mutable.mutable {
                         return Ok(index);
                     } else {
                         return Err(ParseError::new_single(format!(
@@ -60,7 +65,16 @@ impl Resolver {
     pub fn resolve(&mut self, identifier: Token) -> ParseResult<()> {
         for scope in self.scopes.iter().rev() {
             if scope.contains_key(identifier.value.to_string().as_str()) {
-                return Ok(());
+                if let Some(variable) = scope.get(identifier.value.to_string().as_str()) {
+                    if variable.defined {
+                        return Ok(());
+                    } else {
+                        return Err(ParseError::new_single(format!(
+                            "Cannot read uninitialized variable '{}' at line {}.",
+                            identifier.value, identifier.line
+                        )));
+                    }
+                }
             }
         }
 

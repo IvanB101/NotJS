@@ -4,13 +4,16 @@ use std::{
     ops::{Add, Div, Mul, Neg, Not, Sub},
 };
 
-#[derive(PartialEq, Clone, PartialOrd)]
+use super::statements::FunctionStatement;
+
+#[derive(Clone)]
 pub enum Value {
     Null,
     Number(f64),
     String(String),
     Boolean(bool),
     Array(Vec<Value>),
+    Function(Box<FunctionStatement>),
 }
 
 impl Value {
@@ -21,6 +24,31 @@ impl Value {
             Value::String(str) => !str.is_empty(),
             Value::Boolean(bool) => *bool,
             Value::Array(arr) => !arr.is_empty(),
+            Value::Function(_) => true,
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Null, Value::Null) => true,
+            (Value::Number(val1), Value::Number(val2)) => val1 == val2,
+            (Value::String(val1), Value::String(val2)) => val1 == val2,
+            (Value::Boolean(val1), Value::Boolean(val2)) => val1 == val2,
+            (Value::Array(val1), Value::Array(val2)) => val1 == val2,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Value::Number(val1), Value::Number(val2)) => val1.partial_cmp(val2),
+            (Value::String(val1), Value::String(val2)) => val1.partial_cmp(val2),
+            (Value::Boolean(val1), Value::Boolean(val2)) => val1.partial_cmp(val2),
+            _ => None,
         }
     }
 }
@@ -42,6 +70,7 @@ impl fmt::Debug for Value {
                 }
                 write!(f, "]")
             }
+            Value::Function(func) => write!(f, "{:?}", func),
         }
     }
 }
@@ -63,6 +92,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            Value::Function(func) => write!(f, "{:?}", func),
         }
     }
 }

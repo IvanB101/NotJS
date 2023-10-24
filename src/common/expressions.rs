@@ -1,8 +1,11 @@
 use std::fmt;
 
+use dyn_clone::DynClone;
+
 use crate::error::runtime::RuntimeResult;
 
 use super::{
+    environment::Environment,
     token::{Token, TokenType},
     value::Value,
 };
@@ -26,14 +29,17 @@ identifier = letter , { letter | digit | "_" } ;
 literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
-pub trait Expression {
-    fn evaluate(&self) -> RuntimeResult<Value>;
+pub trait Expression: DynClone {
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value>;
     fn node_to_string(&self) -> String;
     fn is_identifier(&self) -> Option<Token> {
         None
     }
 }
 
+dyn_clone::clone_trait_object!(Expression);
+
+#[derive(Clone)]
 pub struct AssignmentExpression {
     pub identifier: Token,
     pub operator: TokenType,
@@ -41,37 +47,45 @@ pub struct AssignmentExpression {
     pub scope: usize,
 }
 
+#[derive(Clone)]
 pub struct ConditionalExpression {
     pub condition: Box<dyn Expression>,
     pub then_branch: Box<dyn Expression>,
     pub else_branch: Box<dyn Expression>,
 }
 
+#[derive(Clone)]
 pub struct BinaryExpression {
     pub left: Box<dyn Expression>,
     pub operator: Token,
     pub right: Box<dyn Expression>,
 }
 
+#[derive(Clone)]
 pub struct UnaryExpression {
     pub operator: Token,
     pub right: Box<dyn Expression>,
 }
 
+#[derive(Clone)]
 pub enum PostfixOperator {
     Index(Box<dyn Expression>),
     Dot(String),
     Call(Vec<Box<dyn Expression>>),
 }
 
+#[derive(Clone)]
 pub struct PostfixExpression {
     pub left: Box<dyn Expression>,
     pub operator: PostfixOperator,
 }
+
+#[derive(Clone)]
 pub struct Identifier {
     pub identifier: Token,
 }
 
+#[derive(Clone)]
 pub struct ArrayLiteral {
     pub elements: Vec<Box<dyn Expression>>,
 }

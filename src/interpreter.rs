@@ -1,7 +1,8 @@
-use lazy_static::lazy_static;
-use std::sync::RwLock;
+// use lazy_static::lazy_static;
+// use std::sync::RwLock;
 
 use crate::common::expressions::{ArrayLiteral, Identifier};
+use crate::common::statements::FunctionStatement;
 use crate::common::token::Token;
 use crate::error::generic::GenericResult;
 use crate::error::runtime::{RuntimeError, RuntimeResult};
@@ -22,22 +23,48 @@ use crate::{
     parser,
 };
 
-lazy_static! {
-    static ref ENVIRONMENT: RwLock<Environment> = RwLock::new(Environment::new());
+// lazy_static! {
+//     static ref ENVIRONMENT: RwLock<Environment> = RwLock::new(Environment::new());
+// }
+
+pub struct Interpreter {
+    pub environment: Environment,
+}
+
+impl Interpreter {
+    pub fn new() -> Self {
+        Self {
+            environment: Environment::new(),
+        }
+    }
+
+    pub fn interpret(&mut self, source: &[u8]) -> GenericResult<()> {
+        let statements = parser::parse(source)?;
+
+        for statement in statements {
+            // println!("{}", statement.node_to_string());
+            statement.execute(&mut self.environment)?;
+        }
+
+        // println!("ENV: {:?}", self.environment);
+
+        Ok(())
+    }
 }
 
 // ## Statements
+
 impl Statement for BlockStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         let mut result = Value::Null;
 
-        ENVIRONMENT.write().unwrap().push();
+        environment.push();
 
         for statement in &self.statements {
-            result = statement.execute()?;
+            result = statement.execute(environment)?;
         }
 
-        ENVIRONMENT.write().unwrap().pop();
+        environment.pop();
 
         Ok(result)
     }
@@ -54,22 +81,15 @@ impl Statement for BlockStatement {
 }
 
 impl Statement for VariableDeclaration {
-    fn execute(&self) -> RuntimeResult<Value> {
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         match self.initializer {
             Some(ref initializer) => {
-                let value = initializer.evaluate()?;
-                ENVIRONMENT.write().unwrap().define(
-                    self.identifier.clone(),
-                    Some(value),
-                    self.mutable,
-                );
+                let value = initializer.evaluate(environment)?;
+                environment.define(self.identifier.clone(), Some(value), self.mutable);
                 Ok(Value::Null)
             }
             None => {
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .define(self.identifier.clone(), None, self.mutable);
+                environment.define(self.identifier.clone(), None, self.mutable);
                 Ok(Value::Null)
             }
         }
@@ -92,9 +112,44 @@ impl Statement for VariableDeclaration {
     }
 }
 
+impl Statement for FunctionStatement {
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        environment.define(
+            self.name.clone(),
+            Some(Value::Function(Box::new(self.clone()))),
+            false,
+        );
+        Ok(Value::Null)
+    }
+
+    fn node_to_string(&self) -> String {
+        format!("fn {}()", self.name.value)
+    }
+}
+
+impl FunctionStatement {
+    fn call(
+        &self,
+        arguments: &mut Vec<Value>,
+        environment: &mut Environment,
+    ) -> RuntimeResult<Value> {
+        environment.push();
+
+        for (i, parameter) in self.parameters.iter().enumerate() {
+            environment.define(parameter.clone(), Some(arguments[i].clone()), false);
+        }
+
+        let result = self.body.execute(environment);
+
+        environment.pop();
+
+        result
+    }
+}
+
 impl Statement for ExpressionStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
-        self.expression.evaluate()
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        self.expression.evaluate(environment)
     }
 
     fn node_to_string(&self) -> String {
@@ -103,8 +158,8 @@ impl Statement for ExpressionStatement {
 }
 
 impl Statement for PrintStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
-        let value = self.expression.evaluate()?;
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let value = self.expression.evaluate(environment)?;
 
         if self.new_line {
             println!("{}", value);
@@ -121,13 +176,13 @@ impl Statement for PrintStatement {
 }
 
 impl Statement for IfStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
-        let condition = self.condition.evaluate()?;
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let condition = self.condition.evaluate(environment)?;
 
         if condition.is_truthy() {
-            self.then_branch.execute()
+            self.then_branch.execute(environment)
         } else if let Some(ref else_branch) = self.else_branch {
-            else_branch.execute()
+            else_branch.execute(environment)
         } else {
             Ok(Value::Null)
         }
@@ -152,11 +207,11 @@ impl Statement for IfStatement {
 }
 
 impl Statement for WhileStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         let mut result = Value::Null;
 
-        while self.condition.evaluate()?.is_truthy() {
-            result = self.body.execute()?;
+        while self.condition.evaluate(environment)?.is_truthy() {
+            result = self.body.execute(environment)?;
         }
 
         Ok(result)
@@ -172,9 +227,9 @@ impl Statement for WhileStatement {
 }
 
 impl Statement for ReturnStatement {
-    fn execute(&self) -> RuntimeResult<Value> {
+    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         if let Some(ref value) = self.value {
-            value.evaluate()
+            value.evaluate(environment)
         } else {
             Ok(Value::Null)
         }
@@ -191,67 +246,36 @@ impl Statement for ReturnStatement {
 
 // ## Expressions
 impl Expression for AssignmentExpression {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        let value = self.value.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let value = self.value.evaluate(environment)?;
 
         match self.operator {
             TokenType::Equal => {
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .assign(self.identifier.clone(), value.clone())?;
+                environment.assign(self.identifier.clone(), value.clone(), self.scope)?;
                 Ok(value)
             }
             TokenType::PlusEqual => {
-                let left = ENVIRONMENT
-                    .read()
-                    .unwrap()
-                    .get(self.identifier.clone())
-                    .cloned()?;
+                let left = environment.get(self.identifier.clone()).cloned()?;
                 let left = (left + value).unwrap();
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .assign(self.identifier.clone(), left.clone())?;
+                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
                 Ok(left)
             }
             TokenType::MinusEqual => {
-                let left = ENVIRONMENT
-                    .read()
-                    .unwrap()
-                    .get(self.identifier.clone())
-                    .cloned()?;
+                let left = environment.get(self.identifier.clone()).cloned()?;
                 let left = (left - value).unwrap();
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .assign(self.identifier.clone(), left.clone())?;
+                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
                 Ok(left)
             }
             TokenType::StarEqual => {
-                let left = ENVIRONMENT
-                    .read()
-                    .unwrap()
-                    .get(self.identifier.clone())
-                    .cloned()?;
+                let left = environment.get(self.identifier.clone()).cloned()?;
                 let left = (left * value).unwrap();
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .assign(self.identifier.clone(), left.clone())?;
+                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
                 Ok(left)
             }
             TokenType::SlashEqual => {
-                let left = ENVIRONMENT
-                    .read()
-                    .unwrap()
-                    .get(self.identifier.clone())
-                    .cloned()?;
+                let left = environment.get(self.identifier.clone()).cloned()?;
                 let left = (left / value).unwrap();
-                ENVIRONMENT
-                    .write()
-                    .unwrap()
-                    .assign(self.identifier.clone(), left.clone())?;
+                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
                 Ok(left)
             }
             _ => Err(RuntimeError::new("Invalid assignment operator".to_string())),
@@ -269,13 +293,13 @@ impl Expression for AssignmentExpression {
 }
 
 impl Expression for ConditionalExpression {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        let condition = self.condition.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let condition = self.condition.evaluate(environment)?;
 
         if condition.is_truthy() {
-            self.then_branch.evaluate()
+            self.then_branch.evaluate(environment)
         } else {
-            self.else_branch.evaluate()
+            self.else_branch.evaluate(environment)
         }
     }
 
@@ -290,9 +314,9 @@ impl Expression for ConditionalExpression {
 }
 
 impl Expression for BinaryExpression {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        let left = self.left.evaluate()?;
-        let right = self.right.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let left = self.left.evaluate(environment)?;
+        let right = self.right.evaluate(environment)?;
 
         match self.operator.token_type {
             TokenType::Plus => Ok((left + right).unwrap()),
@@ -334,8 +358,8 @@ impl Expression for BinaryExpression {
 }
 
 impl Expression for UnaryExpression {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        let right = self.right.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let right = self.right.evaluate(environment)?;
 
         match self.operator.token_type {
             TokenType::Minus => Ok((-right).unwrap()),
@@ -350,12 +374,12 @@ impl Expression for UnaryExpression {
 }
 
 impl Expression for PostfixExpression {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        let left = self.left.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        let left = self.left.evaluate(environment)?;
 
         match self.operator {
             PostfixOperator::Index(ref index) => {
-                let index = index.evaluate()?;
+                let index = index.evaluate(environment)?;
                 match left {
                     Value::String(string) => {
                         if let Value::Number(num) = index {
@@ -401,14 +425,13 @@ impl Expression for PostfixExpression {
                 _ => Err(RuntimeError::new("Invalid dot operator".to_string())),
             },
             PostfixOperator::Call(ref arguments) => match left {
-                // Value::Function(function) => {
-                //     let mut arguments = arguments
-                //         .arguments
-                //         .iter()
-                //         .map(|argument| argument.evaluate())
-                //         .collect::<RuntimeResult<Vec<Value>>>()?;
-                //     function.call(&mut arguments)
-                // }
+                Value::Function(function) => {
+                    let mut arguments = arguments
+                        .iter()
+                        .map(|argument| argument.evaluate(environment))
+                        .collect::<RuntimeResult<Vec<Value>>>()?;
+                    function.call(&mut arguments, environment)
+                }
                 _ => Err(RuntimeError::new("Invalid call operator".to_string())),
             },
         }
@@ -430,8 +453,8 @@ impl Expression for PostfixExpression {
 }
 
 impl Expression for Identifier {
-    fn evaluate(&self) -> RuntimeResult<Value> {
-        match ENVIRONMENT.read().unwrap().get(self.identifier.clone()) {
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
+        match environment.get(self.identifier.clone()) {
             Ok(value) => Ok(value.clone()),
             Err(err) => Err(err),
         }
@@ -447,11 +470,11 @@ impl Expression for Identifier {
 }
 
 impl Expression for ArrayLiteral {
-    fn evaluate(&self) -> RuntimeResult<Value> {
+    fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         let mut result = Vec::new();
 
         for element in &self.elements {
-            result.push(element.evaluate()?);
+            result.push(element.evaluate(environment)?);
         }
 
         Ok(Value::Array(result))
@@ -474,7 +497,7 @@ impl Expression for ArrayLiteral {
 }
 
 impl Expression for Literal {
-    fn evaluate(&self) -> RuntimeResult<Value> {
+    fn evaluate(&self, _environment: &mut Environment) -> RuntimeResult<Value> {
         Ok(self.clone())
     }
 
@@ -495,23 +518,20 @@ impl Expression for Literal {
                 result += "]";
                 result
             }
+            Value::Function(ref function) => function.node_to_string(),
         }
     }
 }
 
 pub fn interpret(source: &[u8]) -> GenericResult<()> {
-    let statements = parser::parse(source)?;
+    let mut interpreter = Interpreter::new();
 
-    for statement in statements {
-        statement.execute()?;
-    }
-
-    Ok(())
+    interpreter.interpret(source)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse;
+    use super::interpret;
 
     #[test]
     fn test_interpret_string_index() {
@@ -519,10 +539,7 @@ mod tests {
             let str = "hello";
             let char = str[1];
         "#;
-        let statements = parse(source).unwrap();
-        for statement in statements {
-            statement.execute().unwrap();
-        }
+        interpret(source).unwrap();
     }
 
     #[test]
@@ -531,9 +548,6 @@ mod tests {
             let str = "hello";
             let length = str.length;
         "#;
-        let statements = parse(source).unwrap();
-        for statement in statements {
-            statement.execute().unwrap();
-        }
+        interpret(source).unwrap();
     }
 }

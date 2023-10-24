@@ -8,8 +8,8 @@ use crate::{
         },
         resolver::Resolver,
         statements::{
-            BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
-            Statement, VariableDeclaration, WhileStatement,
+            BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
+            ReturnStatement, Statement, VariableDeclaration, WhileStatement,
         },
         token::{Token, TokenType},
     },
@@ -96,6 +96,7 @@ impl<'a> Parser<'a> {
 
 /*
 program = { statement } ;
+
 (* Statement *)
 statement = block
             | variable_declaration
@@ -105,12 +106,13 @@ statement = block
             | while_statement
             | return_statement ;
 block = "{" , { statement } , "}" ;
-variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] , ";" ;
-expression_statement = expression , ";" ;
-print_statement = "print" , expression , ";" ;
+variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] ;
+function_declaration = "function" , identifier , "(" , [ parameter_list ] , ")" , block ;
+expression_statement = expression ;
+print_statement = "print" , expression ;
 if_statement = "if" , "(" , expression , ")" , statement , [ "else" , statement ] ;
 while_statement = "while" , "(" , expression , ")" , statement ;
-return_statement = "return" , [ expression ] , ";" ;
+return_statement = "return" , [ expression ] ;
 
 (* Expression *)
 expression = assignment_expression ;
@@ -132,10 +134,12 @@ unary_expression = postfix_expression | ( (  "-" | "!" ) , unary_expression ) ;
 postfix_expression = primary_expression , { "[" , expression , "]" | "." , identifier | "(" , [ argument_list ] , ")" } ;
 
 primary_expression = identifier | literal | "(" , expression , ")" ;
+
+parameter_list = identifier , { "," , identifier } ;
 argument_list = expression , { "," , expression } ;
 assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
 identifier = letter , { letter | digit | "_" } ;
-literal = NUMBER | STRING | BOOLEAN | NULL ;
+literal = NUMBER | STRING | BOOLEAN | ARRAY | NULL ;
 */
 
 impl<'a> Parser<'a> {
@@ -174,6 +178,10 @@ impl<'a> Parser<'a> {
                     self.block()
                 }
                 TokenType::Let | TokenType::Const => self.variable_declaration(),
+                TokenType::Function => {
+                    self.next();
+                    self.function_statement()
+                }
                 TokenType::Print | TokenType::Println => self.print_statement(),
                 TokenType::If => {
                     self.next();
@@ -244,7 +252,7 @@ impl<'a> Parser<'a> {
 
         let identifier = self.consume(TokenType::Identifier)?;
 
-        let scope = self.resolver.declare(identifier.clone(), mutable);
+        let mut defined = false;
 
         let initializer = if let Some(Token {
             token_type: TokenType::Equal,
@@ -252,16 +260,82 @@ impl<'a> Parser<'a> {
         }) = self.peek()
         {
             self.next();
+            defined = true;
             Some(self.expression()?)
         } else {
             None
         };
+
+        let scope = self.resolver.declare(identifier.clone(), mutable, defined);
 
         Ok(Box::new(VariableDeclaration {
             mutable,
             identifier,
             initializer,
             scope,
+        }))
+    }
+
+    fn function_statement(&mut self) -> ParseResult<Box<dyn Statement>> {
+        let name = self.consume(TokenType::Identifier)?;
+
+        self.resolver.declare(name.clone(), false, true);
+
+        self.consume(TokenType::LeftParentheses)?;
+
+        let mut parameters = Vec::new();
+
+        self.resolver.push();
+
+        if let Some(Token {
+            token_type: TokenType::RightParentheses,
+            ..
+        }) = self.peek()
+        {
+            self.next();
+        } else {
+            loop {
+                parameters.push(self.consume(TokenType::Identifier)?);
+
+                self.resolver
+                    .declare(parameters.last().unwrap().clone(), true, true);
+
+                match self.peek() {
+                    Some(Token {
+                        token_type: TokenType::RightParentheses,
+                        ..
+                    }) => {
+                        break;
+                    }
+                    Some(Token {
+                        token_type: TokenType::Comma,
+                        ..
+                    }) => {
+                        self.next();
+                    }
+                    Some(token) => {
+                        return Err(ParseError::new_single(format!(
+                            "Expected ')' or ',' after parameter, found: {}",
+                            token.value
+                        )))
+                    }
+                    None => break,
+                }
+            }
+
+            self.consume(TokenType::RightParentheses)?;
+        }
+
+        self.consume(TokenType::LeftBrace)?;
+
+        let body = self.block()?;
+
+        self.resolver.pop();
+
+        Ok(Box::new(FunctionStatement {
+            name,
+            parameters,
+            body,
         }))
     }
 
@@ -586,7 +660,6 @@ impl<'a> Parser<'a> {
 
                             loop {
                                 arguments.push(self.expression()?);
-                                println!("{}", self.peek().unwrap().value.to_string());
 
                                 match self.peek() {
                                     Some(Token {

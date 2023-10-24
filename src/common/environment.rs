@@ -4,6 +4,7 @@ use crate::error::runtime::{RuntimeError, RuntimeResult};
 
 use super::{token::Token, value::Value};
 
+#[derive(Debug)]
 pub struct Environment {
     pub environment: Vec<HashMap<String, Variable>>,
 }
@@ -36,17 +37,22 @@ impl Environment {
             .insert(identifier.value.to_string(), Variable { mutable, value });
     }
 
-    pub fn assign(&mut self, identifier: Token, value: Value) -> RuntimeResult<()> {
-        for scope in self.environment.iter_mut().rev() {
-            if let Some(variable) = scope.get_mut(identifier.value.to_string().as_str()) {
-                if !variable.mutable {
-                    return Err(RuntimeError::new_immutable_variable(identifier));
-                }
-                variable.value = Some(value);
-                return Ok(());
+    pub fn assign(&mut self, identifier: Token, value: Value, index: usize) -> RuntimeResult<()> {
+        if let Some(variable) =
+            self.environment[index].get_mut(identifier.value.to_string().as_str())
+        {
+            if !variable.mutable {
+                return Err(RuntimeError::new_immutable_variable(identifier));
             }
+            variable.value = Some(value);
+            return Ok(());
+        } else {
+            return Err(RuntimeError::new_undeclared_variable(identifier));
         }
-        Err(RuntimeError::new_undeclared_variable(identifier))
+        // if index == 0 {
+        //     return Err(RuntimeError::new_undeclared_variable(identifier));
+        // }
+        // self.assign(identifier, value, index - 1)
     }
 
     pub fn get(&self, identifier: Token) -> RuntimeResult<&Value> {

@@ -27,7 +27,7 @@ pub const KEYWORDS: phf::Map<&str, TokenType> = phf_map! {
     "const" => TokenType::Const,
 };
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, PartialOrd, Clone, Debug)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: Value,
@@ -44,7 +44,7 @@ impl Token {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
     LeftParentheses,
     RightParentheses,

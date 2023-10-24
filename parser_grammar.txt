@@ -10,6 +10,7 @@ statement = block
             | return_statement ;
 block = "{" , { statement } , "}" ;
 variable_declaration = ( "let" | "const" ) , identifier , [ "=" , expression ] ;
+function_declaration = "function" , identifier , "(" , [ parameter_list ] , ")" , block ;
 expression_statement = expression ;
 print_statement = "print" , expression ;
 if_statement = "if" , "(" , expression , ")" , statement , [ "else" , statement ] ;
@@ -34,11 +35,11 @@ unary_expression = postfix_expression | ( (  "-" | "!" ) , unary_expression ) ;
 
 (* PostfixExpression *)
 postfix_expression = primary_expression , { "[" , expression , "]" | "." , identifier | "(" , [ argument_list ] , ")" } ;
-argument_list = expression , { "," , expression } ;
 
 primary_expression = identifier | literal | "(" , expression , ")" ;
+
+parameter_list = identifier , { "," , identifier } ;
+argument_list = expression , { "," , expression } ;
 assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
 identifier = letter , { letter | digit | "_" } ;
 literal = NUMBER | STRING | BOOLEAN | ARRAY | NULL ;
-
-(* Pending add variables *)
