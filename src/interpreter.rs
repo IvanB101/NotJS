@@ -41,8 +41,8 @@ impl Interpreter {
     pub fn interpret(&mut self, source: &[u8]) -> GenericResult<()> {
         let statements = parser::parse(source)?;
 
+        println!("{:?}", statements);
         for statement in statements {
-            // println!("{}", statement.node_to_string());
             statement.execute(&mut self.environment)?;
         }
 
@@ -68,16 +68,6 @@ impl Statement for BlockStatement {
 
         Ok(result)
     }
-
-    fn node_to_string(&self) -> String {
-        let mut result = String::new();
-
-        for statement in &self.statements {
-            result += &statement.node_to_string();
-        }
-
-        result
-    }
 }
 
 impl Statement for VariableDeclaration {
@@ -94,22 +84,6 @@ impl Statement for VariableDeclaration {
             }
         }
     }
-
-    fn node_to_string(&self) -> String {
-        match self.initializer {
-            Some(ref initializer) => format!(
-                "{} {} = {}",
-                if self.mutable { "let" } else { "const" },
-                self.identifier.value,
-                initializer.node_to_string()
-            ),
-            None => format!(
-                "{} {}",
-                if self.mutable { "let" } else { "const" },
-                self.identifier.value
-            ),
-        }
-    }
 }
 
 impl Statement for FunctionStatement {
@@ -120,10 +94,6 @@ impl Statement for FunctionStatement {
             false,
         );
         Ok(Value::Null)
-    }
-
-    fn node_to_string(&self) -> String {
-        format!("fn {}()", self.name.value)
     }
 }
 
@@ -151,10 +121,6 @@ impl Statement for ExpressionStatement {
     fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         self.expression.evaluate(environment)
     }
-
-    fn node_to_string(&self) -> String {
-        format!("{}", self.expression.node_to_string())
-    }
 }
 
 impl Statement for PrintStatement {
@@ -168,10 +134,6 @@ impl Statement for PrintStatement {
         }
 
         Ok(value)
-    }
-
-    fn node_to_string(&self) -> String {
-        format!("print {}", self.expression.node_to_string())
     }
 }
 
@@ -187,23 +149,6 @@ impl Statement for IfStatement {
             Ok(Value::Null)
         }
     }
-
-    fn node_to_string(&self) -> String {
-        if let Some(ref else_branch) = self.else_branch {
-            format!(
-                "if {} {} else {}",
-                self.condition.node_to_string(),
-                self.then_branch.node_to_string(),
-                else_branch.node_to_string()
-            )
-        } else {
-            format!(
-                "if {} {}",
-                self.condition.node_to_string(),
-                self.then_branch.node_to_string()
-            )
-        }
-    }
 }
 
 impl Statement for WhileStatement {
@@ -216,14 +161,6 @@ impl Statement for WhileStatement {
 
         Ok(result)
     }
-
-    fn node_to_string(&self) -> String {
-        format!(
-            "while {} {}",
-            self.condition.node_to_string(),
-            self.body.node_to_string()
-        )
-    }
 }
 
 impl Statement for ReturnStatement {
@@ -232,14 +169,6 @@ impl Statement for ReturnStatement {
             value.evaluate(environment)
         } else {
             Ok(Value::Null)
-        }
-    }
-
-    fn node_to_string(&self) -> String {
-        if let Some(ref value) = self.value {
-            format!("return {}", value.node_to_string())
-        } else {
-            "return".to_string()
         }
     }
 }
@@ -281,15 +210,6 @@ impl Expression for AssignmentExpression {
             _ => Err(RuntimeError::new("Invalid assignment operator".to_string())),
         }
     }
-
-    fn node_to_string(&self) -> String {
-        format!(
-            "{} {} {}",
-            self.identifier.value,
-            self.operator,
-            self.value.node_to_string()
-        )
-    }
 }
 
 impl Expression for ConditionalExpression {
@@ -301,15 +221,6 @@ impl Expression for ConditionalExpression {
         } else {
             self.else_branch.evaluate(environment)
         }
-    }
-
-    fn node_to_string(&self) -> String {
-        format!(
-            "{} ? {} : {}",
-            self.condition.node_to_string(),
-            self.then_branch.node_to_string(),
-            self.else_branch.node_to_string()
-        )
     }
 }
 
@@ -346,15 +257,6 @@ impl Expression for BinaryExpression {
             _ => Err(RuntimeError::new("Invalid binary operator".to_string())),
         }
     }
-
-    fn node_to_string(&self) -> String {
-        format!(
-            "{} {} {}",
-            self.left.node_to_string(),
-            self.operator.value,
-            self.right.node_to_string()
-        )
-    }
 }
 
 impl Expression for UnaryExpression {
@@ -366,10 +268,6 @@ impl Expression for UnaryExpression {
             TokenType::Bang => Ok(!right),
             _ => Err(RuntimeError::new("Invalid unary operator".to_string())),
         }
-    }
-
-    fn node_to_string(&self) -> String {
-        format!("{}{}", self.operator.value, self.right.node_to_string())
     }
 }
 
@@ -436,20 +334,6 @@ impl Expression for PostfixExpression {
             },
         }
     }
-
-    fn node_to_string(&self) -> String {
-        match self.operator {
-            PostfixOperator::Index(ref index) => {
-                format!("{}[{}]", self.left.node_to_string(), index.node_to_string())
-            }
-            PostfixOperator::Dot(ref name) => {
-                format!("{}.{}", self.left.node_to_string(), name)
-            }
-            PostfixOperator::Call(ref arguments) => {
-                format!("{}({:?})", self.left.node_to_string(), arguments)
-            }
-        }
-    }
 }
 
 impl Expression for Identifier {
@@ -458,10 +342,6 @@ impl Expression for Identifier {
             Ok(value) => Ok(value.clone()),
             Err(err) => Err(err),
         }
-    }
-
-    fn node_to_string(&self) -> String {
-        self.identifier.value.to_string()
     }
 
     fn is_identifier(&self) -> Option<Token> {
@@ -479,47 +359,11 @@ impl Expression for ArrayLiteral {
 
         Ok(Value::Array(result))
     }
-
-    fn node_to_string(&self) -> String {
-        let mut result = "[".to_string();
-
-        for (i, element) in self.elements.iter().enumerate() {
-            if i != 0 {
-                result += ", ";
-            }
-            result += &element.node_to_string();
-        }
-
-        result += "]";
-
-        result
-    }
 }
 
 impl Expression for Literal {
     fn evaluate(&self, _environment: &mut Environment) -> RuntimeResult<Value> {
         Ok(self.clone())
-    }
-
-    fn node_to_string(&self) -> String {
-        match self {
-            Value::Number(num) => num.to_string(),
-            Value::String(ref string) => "\"".to_string() + string + "\"",
-            Value::Boolean(boolean) => boolean.to_string(),
-            Value::Null => "null".to_string(),
-            Value::Array(ref array) => {
-                let mut result = "[".to_string();
-                for (i, value) in array.iter().enumerate() {
-                    if i != 0 {
-                        result += ", ";
-                    }
-                    result += &value.node_to_string();
-                }
-                result += "]";
-                result
-            }
-            Value::Function(ref function) => function.node_to_string(),
-        }
     }
 }
 

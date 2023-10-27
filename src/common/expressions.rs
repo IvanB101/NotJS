@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{Debug, Display};
 
 use dyn_clone::DynClone;
 
@@ -29,17 +29,25 @@ identifier = letter , { letter | digit | "_" } ;
 literal = NUMBER | STRING | BOOLEAN | NULL ;
 */
 
-pub trait Expression: DynClone {
+pub trait Expression
+where
+    Self: DynClone + Debug,
+{
     fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value>;
-    fn node_to_string(&self) -> String;
     fn is_identifier(&self) -> Option<Token> {
         None
     }
 }
 
+impl Display for dyn Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 dyn_clone::clone_trait_object!(Expression);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssignmentExpression {
     pub identifier: Token,
     pub operator: TokenType,
@@ -47,59 +55,47 @@ pub struct AssignmentExpression {
     pub scope: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConditionalExpression {
     pub condition: Box<dyn Expression>,
     pub then_branch: Box<dyn Expression>,
     pub else_branch: Box<dyn Expression>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BinaryExpression {
     pub left: Box<dyn Expression>,
     pub operator: Token,
     pub right: Box<dyn Expression>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnaryExpression {
     pub operator: Token,
     pub right: Box<dyn Expression>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PostfixOperator {
     Index(Box<dyn Expression>),
     Dot(String),
     Call(Vec<Box<dyn Expression>>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PostfixExpression {
     pub left: Box<dyn Expression>,
     pub operator: PostfixOperator,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Identifier {
     pub identifier: Token,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ArrayLiteral {
     pub elements: Vec<Box<dyn Expression>>,
 }
 
 pub type Literal = Value;
-
-impl fmt::Debug for dyn Expression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.node_to_string())
-    }
-}
-
-// impl fmt::Debug for Literal {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "{:?}", self.value)
-//     }
-// }
