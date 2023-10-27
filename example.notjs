@@ -1,5 +1,6 @@
 // Fibonacci sequence with while
 
+/*
 let a = 0;
 let b = 1;
 
@@ -52,3 +53,10 @@ while (x < height) {
 }
 
 println ""
+*/
+
+function sum(val1, val2) {
+    println "sum: " + (val1 + val2)
+}
+
+sum(1, 2)

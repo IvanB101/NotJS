@@ -1,7 +1,8 @@
 use std::fmt::{Debug, Display};
 
 use crate::{
-    common::expressions::Expression, error::runtime::RuntimeResult,
+    common::expressions::Expression,
+    error::runtime::{RuntimeError, RuntimeResult},
     interpreter::environment::Environment,
 };
 
@@ -92,8 +93,17 @@ impl FunctionStatement {
     ) -> RuntimeResult<Value> {
         environment.push();
 
-        for (i, parameter) in self.parameters.iter().enumerate() {
-            environment.define(parameter.clone(), Some(arguments[i].clone()), false);
+        if self.parameters.len() != arguments.len() {
+            return Err(RuntimeError::new(format!(
+                "Expected {} arguments, found {}, at line {}",
+                self.parameters.len(),
+                arguments.len(),
+                self.name.line
+            )));
+        }
+
+        for (parameter, argument) in self.parameters.iter().zip(arguments) {
+            environment.define(parameter.clone(), Some(argument.clone()), false);
         }
 
         let result = self.body.execute(environment);

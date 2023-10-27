@@ -27,7 +27,7 @@ impl Interpreter {
     pub fn interpret(&mut self, source: &[u8]) -> GenericResult<()> {
         let statements = parser::parse(source)?;
 
-        println!("{:?}", statements);
+        // println!("{:?}", statements);
         for statement in statements {
             statement.execute(&mut self.environment)?;
         }

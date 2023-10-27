@@ -35,6 +35,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn begin_scope(&mut self) {
+        self.resolver.push()
+    }
+
+    fn end_scope(&mut self) {
+        self.resolver.pop()
+    }
+
     fn parse(&mut self) -> ParseResult<Vec<Box<dyn Statement>>> {
         self.program()
     }
@@ -209,12 +217,12 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
-        self.resolver.push();
+        self.begin_scope();
 
         while let Some(token) = self.peek() {
             if token.token_type == TokenType::RightBrace {
                 self.next();
-                self.resolver.pop();
+                self.end_scope();
                 break;
             }
 
@@ -288,52 +296,34 @@ impl<'a> Parser<'a> {
 
         let mut parameters = Vec::new();
 
-        self.resolver.push();
+        self.begin_scope();
 
         if let Some(Token {
             token_type: TokenType::RightParentheses,
             ..
         }) = self.peek()
         {
-            self.next();
         } else {
-            loop {
+            parameters.push(self.consume(TokenType::Identifier)?);
+
+            while let Some(Token {
+                token_type: TokenType::Comma,
+                ..
+            }) = self.peek()
+            {
+                self.next();
                 parameters.push(self.consume(TokenType::Identifier)?);
-
-                self.resolver
-                    .declare(parameters.last().unwrap().clone(), true, true);
-
-                match self.peek() {
-                    Some(Token {
-                        token_type: TokenType::RightParentheses,
-                        ..
-                    }) => {
-                        break;
-                    }
-                    Some(Token {
-                        token_type: TokenType::Comma,
-                        ..
-                    }) => {
-                        self.next();
-                    }
-                    Some(token) => {
-                        return Err(ParseError::new_single(format!(
-                            "Expected ')' or ',' after parameter, found: {}",
-                            token.value
-                        )))
-                    }
-                    None => break,
-                }
             }
-
-            self.consume(TokenType::RightParentheses)?;
         }
-
+        parameters.iter().for_each(|param| {
+            self.resolver.declare(param.clone(), true, true);
+        });
+        self.consume(TokenType::RightParentheses)?;
         self.consume(TokenType::LeftBrace)?;
 
         let body = self.block()?;
 
-        self.resolver.pop();
+        self.end_scope();
 
         Ok(Box::new(FunctionStatement {
             name,
@@ -655,49 +645,30 @@ impl<'a> Parser<'a> {
                 TokenType::LeftParentheses => {
                     self.next();
 
-                    let arguments = if let Some(token) = self.peek() {
-                        if token.token_type == TokenType::RightParentheses {
-                            None
-                        } else {
-                            let mut arguments = Vec::new();
+                    let mut arguments = Vec::new();
 
-                            loop {
-                                arguments.push(self.expression()?);
-
-                                match self.peek() {
-                                    Some(Token {
-                                        token_type: TokenType::RightParentheses,
-                                        ..
-                                    }) => {
-                                        break;
-                                    }
-                                    Some(Token {
-                                        token_type: TokenType::Comma,
-                                        ..
-                                    }) => {
-                                        self.next();
-                                    }
-                                    Some(token) => {
-                                        return Err(ParseError::new_single(format!(
-                                            "Expected ')' or ',' after argument, found: {}",
-                                            token.value
-                                        )))
-                                    }
-                                    None => break,
-                                }
-                            }
-
-                            Some(arguments)
-                        }
+                    if let Some(Token {
+                        token_type: TokenType::RightParentheses,
+                        ..
+                    }) = self.peek()
+                    {
                     } else {
-                        None
-                    };
+                        arguments.push(self.expression()?);
 
+                        while let Some(Token {
+                            token_type: TokenType::Comma,
+                            ..
+                        }) = self.peek()
+                        {
+                            self.next();
+                            arguments.push(self.expression()?);
+                        }
+                    }
                     self.consume(TokenType::RightParentheses)?;
 
                     expression = Box::new(PostfixExpression {
                         left: expression,
-                        operator: PostfixOperator::Call(arguments.unwrap_or(Vec::new())),
+                        operator: PostfixOperator::Call(arguments),
                     });
                 }
                 _ => {
@@ -750,36 +721,15 @@ impl<'a> Parser<'a> {
                         ..
                     }) = self.peek()
                     {
-                        self.next();
                     } else {
-                        loop {
+                        elements.push(self.expression()?);
+
+                        while let Some(Token{ token_type: TokenType::Comma, .. }) = self.peek() {
+                            self.next();
                             elements.push(self.expression()?);
-
-                            match self.peek() {
-                                Some(Token {
-                                    token_type: TokenType::RightBracket,
-                                    ..
-                                }) => {
-                                    break;
-                                }
-                                Some(Token {
-                                    token_type: TokenType::Comma,
-                                    ..
-                                }) => {
-                                    self.next();
-                                }
-                                Some(token) => {
-                                    return Err(ParseError::new_single(format!(
-                                        "Expected ']' or ',' after element, found: {}",
-                                        token.value
-                                    )))
-                                }
-                                None => break,
-                            }
                         }
-
-                        self.consume(TokenType::RightBracket)?;
                     }
+                    self.consume(TokenType::RightBracket)?;
 
                     Ok(Box::new(ArrayLiteral { elements }))
                 }

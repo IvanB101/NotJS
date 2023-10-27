@@ -42,15 +42,15 @@ impl Resolver {
     pub fn define(&mut self, identifier: Token) -> ParseResult<usize> {
         for (index, scope) in self.scopes.iter().enumerate().rev() {
             if scope.contains_key(identifier.value.to_string().as_str()) {
-                if let Some(mutable) = scope.get(identifier.value.to_string().as_str()) {
-                    if mutable.mutable {
-                        return Ok(index);
-                    } else {
-                        return Err(ParseError::new_single(format!(
-                            "Cannot reassign immutable variable '{}' at line {}.",
-                            identifier.value, identifier.line
-                        )));
-                    }
+                if let Some(Variable { mutable: true, .. }) =
+                    scope.get(identifier.value.to_string().as_str())
+                {
+                    return Ok(index);
+                } else {
+                    return Err(ParseError::new_single(format!(
+                        "Cannot reassign immutable variable '{}' at line {}.",
+                        identifier.value, identifier.line
+                    )));
                 }
             }
         }
@@ -65,15 +65,15 @@ impl Resolver {
     pub fn resolve(&mut self, identifier: Token) -> ParseResult<()> {
         for scope in self.scopes.iter().rev() {
             if scope.contains_key(identifier.value.to_string().as_str()) {
-                if let Some(variable) = scope.get(identifier.value.to_string().as_str()) {
-                    if variable.defined {
-                        return Ok(());
-                    } else {
-                        return Err(ParseError::new_single(format!(
-                            "Cannot read uninitialized variable '{}' at line {}.",
-                            identifier.value, identifier.line
-                        )));
-                    }
+                if let Some(Variable { defined: true, .. }) =
+                    scope.get(identifier.value.to_string().as_str())
+                {
+                    return Ok(());
+                } else {
+                    return Err(ParseError::new_single(format!(
+                        "Cannot read uninitialized variable '{}' at line {}.",
+                        identifier.value, identifier.line
+                    )));
                 }
             }
         }
