@@ -1,8 +1,11 @@
 use std::fmt::{Debug, Display};
 
-use crate::error::runtime::RuntimeResult;
+use crate::{
+    common::expressions::Expression, error::runtime::RuntimeResult,
+    interpreter::environment::Environment,
+};
 
-use super::{environment::Environment, expressions::Expression, token::Token, value::Value};
+use super::{token::Token, value::Value};
 
 use dyn_clone::DynClone;
 
@@ -79,4 +82,24 @@ pub struct FunctionStatement {
     pub name: Token,
     pub parameters: Vec<Token>,
     pub body: Box<dyn Statement>,
+}
+
+impl FunctionStatement {
+    pub fn call(
+        &self,
+        arguments: &mut Vec<Value>,
+        environment: &mut Environment,
+    ) -> RuntimeResult<Value> {
+        environment.push();
+
+        for (i, parameter) in self.parameters.iter().enumerate() {
+            environment.define(parameter.clone(), Some(arguments[i].clone()), false);
+        }
+
+        let result = self.body.execute(environment);
+
+        environment.pop();
+
+        result
+    }
 }

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::error::runtime::{RuntimeError, RuntimeResult};
-
-use super::{token::Token, value::Value};
+use crate::{
+    common::{token::Token, value::Value},
+    error::runtime::{RuntimeError, RuntimeResult},
+};
 
 #[derive(Debug)]
 pub struct Environment {

@@ -6,7 +6,6 @@ use crate::{
             ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
             Expression, Identifier, PostfixExpression, PostfixOperator, UnaryExpression,
         },
-        resolver::Resolver,
         statements::{
             BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
             ReturnStatement, Statement, VariableDeclaration, WhileStatement,
@@ -16,6 +15,10 @@ use crate::{
     error::parse::{ParseError, ParseResult},
     lexer::Scanner,
 };
+
+use self::resolver::Resolver;
+
+mod resolver;
 
 struct Parser<'a> {
     actual: Option<Token>,

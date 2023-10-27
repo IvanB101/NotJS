@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::error::parse::{ParseError, ParseResult};
 
-use super::token::Token;
+use crate::common::token::Token;
 
 struct Variable {
     mutable: bool,

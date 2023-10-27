@@ -3,9 +3,9 @@ use std::fmt::{Debug, Display};
 use dyn_clone::DynClone;
 
 use crate::error::runtime::RuntimeResult;
+use crate::interpreter::environment::Environment;
 
 use super::{
-    environment::Environment,
     token::{Token, TokenType},
     value::Value,
 };

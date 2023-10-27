@@ -1,179 +1,17 @@
-// use lazy_static::lazy_static;
-// use std::sync::RwLock;
-
-use crate::common::expressions::{ArrayLiteral, Identifier};
-use crate::common::statements::FunctionStatement;
-use crate::common::token::Token;
-use crate::error::generic::GenericResult;
-use crate::error::runtime::{RuntimeError, RuntimeResult};
 use crate::{
     common::{
-        environment::Environment,
         expressions::{
-            AssignmentExpression, BinaryExpression, ConditionalExpression, Expression, Literal,
-            PostfixExpression, PostfixOperator, UnaryExpression,
+            ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
+            Expression, Identifier, Literal, PostfixExpression, PostfixOperator, UnaryExpression,
         },
-        statements::{
-            BlockStatement, ExpressionStatement, IfStatement, PrintStatement, ReturnStatement,
-            Statement, VariableDeclaration, WhileStatement,
-        },
-        token::TokenType,
+        token::{Token, TokenType},
         value::Value,
     },
-    parser,
+    error::runtime::{RuntimeError, RuntimeResult},
 };
 
-// lazy_static! {
-//     static ref ENVIRONMENT: RwLock<Environment> = RwLock::new(Environment::new());
-// }
+use super::environment::Environment;
 
-pub struct Interpreter {
-    pub environment: Environment,
-}
-
-impl Interpreter {
-    pub fn new() -> Self {
-        Self {
-            environment: Environment::new(),
-        }
-    }
-
-    pub fn interpret(&mut self, source: &[u8]) -> GenericResult<()> {
-        let statements = parser::parse(source)?;
-
-        println!("{:?}", statements);
-        for statement in statements {
-            statement.execute(&mut self.environment)?;
-        }
-
-        // println!("ENV: {:?}", self.environment);
-
-        Ok(())
-    }
-}
-
-// ## Statements
-
-impl Statement for BlockStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        let mut result = Value::Null;
-
-        environment.push();
-
-        for statement in &self.statements {
-            result = statement.execute(environment)?;
-        }
-
-        environment.pop();
-
-        Ok(result)
-    }
-}
-
-impl Statement for VariableDeclaration {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        match self.initializer {
-            Some(ref initializer) => {
-                let value = initializer.evaluate(environment)?;
-                environment.define(self.identifier.clone(), Some(value), self.mutable);
-                Ok(Value::Null)
-            }
-            None => {
-                environment.define(self.identifier.clone(), None, self.mutable);
-                Ok(Value::Null)
-            }
-        }
-    }
-}
-
-impl Statement for FunctionStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        environment.define(
-            self.name.clone(),
-            Some(Value::Function(Box::new(self.clone()))),
-            false,
-        );
-        Ok(Value::Null)
-    }
-}
-
-impl FunctionStatement {
-    fn call(
-        &self,
-        arguments: &mut Vec<Value>,
-        environment: &mut Environment,
-    ) -> RuntimeResult<Value> {
-        environment.push();
-
-        for (i, parameter) in self.parameters.iter().enumerate() {
-            environment.define(parameter.clone(), Some(arguments[i].clone()), false);
-        }
-
-        let result = self.body.execute(environment);
-
-        environment.pop();
-
-        result
-    }
-}
-
-impl Statement for ExpressionStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        self.expression.evaluate(environment)
-    }
-}
-
-impl Statement for PrintStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        let value = self.expression.evaluate(environment)?;
-
-        if self.new_line {
-            println!("{}", value);
-        } else {
-            print!("{}", value);
-        }
-
-        Ok(value)
-    }
-}
-
-impl Statement for IfStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        let condition = self.condition.evaluate(environment)?;
-
-        if condition.is_truthy() {
-            self.then_branch.execute(environment)
-        } else if let Some(ref else_branch) = self.else_branch {
-            else_branch.execute(environment)
-        } else {
-            Ok(Value::Null)
-        }
-    }
-}
-
-impl Statement for WhileStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        let mut result = Value::Null;
-
-        while self.condition.evaluate(environment)?.is_truthy() {
-            result = self.body.execute(environment)?;
-        }
-
-        Ok(result)
-    }
-}
-
-impl Statement for ReturnStatement {
-    fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        if let Some(ref value) = self.value {
-            value.evaluate(environment)
-        } else {
-            Ok(Value::Null)
-        }
-    }
-}
-
-// ## Expressions
 impl Expression for AssignmentExpression {
     fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         let value = self.value.evaluate(environment)?;
@@ -365,33 +203,8 @@ impl Expression for Literal {
     fn evaluate(&self, _environment: &mut Environment) -> RuntimeResult<Value> {
         Ok(self.clone())
     }
-}
 
-pub fn interpret(source: &[u8]) -> GenericResult<()> {
-    let mut interpreter = Interpreter::new();
-
-    interpreter.interpret(source)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::interpret;
-
-    #[test]
-    fn test_interpret_string_index() {
-        let source = br#"
-            let str = "hello";
-            let char = str[1];
-        "#;
-        interpret(source).unwrap();
-    }
-
-    #[test]
-    fn test_interpret_string_length() {
-        let source = br#"
-            let str = "hello";
-            let length = str.length;
-        "#;
-        interpret(source).unwrap();
+    fn is_identifier(&self) -> Option<crate::common::token::Token> {
+        None
     }
 }
