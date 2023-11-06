@@ -1,10 +1,9 @@
+use super::function::Function;
 use core::fmt;
 use std::{
     io::{Error, Result},
     ops::{Add, Div, Mul, Neg, Not, Sub},
 };
-
-use super::statements::FunctionStatement;
 
 #[derive(Clone)]
 pub enum Value {
@@ -13,7 +12,7 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Array(Vec<Value>),
-    Function(Box<FunctionStatement>),
+    Function(Box<Function>),
 }
 
 impl Value {

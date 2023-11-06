@@ -1,7 +1,7 @@
 use crate::{
     common::{
         statements::{
-            BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
+            BlockStatement, ExpressionStatement, FunctionDeclaration, IfStatement, PrintStatement,
             ReturnStatement, Statement, VariableDeclaration, WhileStatement,
         },
         value::Value,
@@ -43,11 +43,11 @@ impl Statement for VariableDeclaration {
     }
 }
 
-impl Statement for FunctionStatement {
+impl Statement for FunctionDeclaration {
     fn execute(&self, environment: &mut Environment) -> RuntimeResult<Value> {
         environment.define(
-            self.name.clone(),
-            Some(Value::Function(Box::new(self.clone()))),
+            self.function.name.clone(),
+            Some(Value::Function(Box::new(self.function.clone()))),
             false,
         );
         Ok(Value::Null)

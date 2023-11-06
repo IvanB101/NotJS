@@ -6,8 +6,9 @@ use crate::{
             ArrayLiteral, AssignmentExpression, BinaryExpression, ConditionalExpression,
             Expression, Identifier, PostfixExpression, PostfixOperator, UnaryExpression,
         },
+        function::Function,
         statements::{
-            BlockStatement, ExpressionStatement, FunctionStatement, IfStatement, PrintStatement,
+            BlockStatement, ExpressionStatement, FunctionDeclaration, IfStatement, PrintStatement,
             ReturnStatement, Statement, VariableDeclaration, WhileStatement,
         },
         token::{Token, TokenType},
@@ -22,7 +23,7 @@ mod resolver;
 
 struct Parser<'a> {
     actual: Option<Token>,
-    _scanner: Peekable<Scanner<'a>>,
+    scanner: Peekable<Scanner<'a>>,
     resolver: Resolver,
 }
 
@@ -30,7 +31,7 @@ impl<'a> Parser<'a> {
     pub fn new(source: &'a [u8]) -> Self {
         Parser {
             actual: None,
-            _scanner: Scanner::new(source).peekable(),
+            scanner: Scanner::new(source).peekable(),
             resolver: Resolver::new(),
         }
     }
@@ -48,12 +49,12 @@ impl<'a> Parser<'a> {
     }
 
     fn next(&mut self) -> Option<Token> {
-        self.actual = self._scanner.next();
+        self.actual = self.scanner.next();
         self.actual.clone()
     }
 
     fn peek(&mut self) -> Option<&Token> {
-        self._scanner.peek()
+        self.scanner.peek()
     }
 
     fn consume(&mut self, ttype: TokenType) -> Result<Token, ParseError> {
@@ -73,7 +74,7 @@ impl<'a> Parser<'a> {
     }
 
     fn synchronize(&mut self) {
-        while let Some(token) = self._scanner.peek() {
+        while let Some(token) = self.scanner.peek() {
             match token.token_type {
                 // TokenType::Semicolon | TokenType::Newline => {
                 //     println!("stop at {}", token.token_type);
@@ -93,13 +94,12 @@ impl<'a> Parser<'a> {
                             | TokenType::Return
                             | TokenType::LeftBrace,
                         ..
-                    }) = self._scanner.peek()
+                    }) = self.scanner.peek()
                     {
                         return;
                     }
                 }
             }
-
             self.next();
         }
     }
@@ -182,8 +182,8 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> ParseResult<Box<dyn Statement>> {
-        if let Some(token) = self.peek() {
-            match token.token_type {
+        if let Some(Token { token_type, .. }) = self.peek() {
+            match token_type {
                 TokenType::LeftBrace => {
                     self.next();
                     self.block()
@@ -325,10 +325,8 @@ impl<'a> Parser<'a> {
 
         self.end_scope();
 
-        Ok(Box::new(FunctionStatement {
-            name,
-            parameters,
-            body,
+        Ok(Box::new(FunctionDeclaration {
+            function: Function::new(name, parameters, body),
         }))
     }
 
