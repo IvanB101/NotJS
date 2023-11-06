@@ -14,39 +14,25 @@ use super::environment::Environment;
 
 impl Expression for AssignmentExpression {
     fn evaluate(&self, environment: &mut Environment) -> RuntimeResult<Value> {
-        let value = self.value.evaluate(environment)?;
+        let operand = self.value.evaluate(environment)?;
 
-        match self.operator {
-            TokenType::Equal => {
-                environment.assign(self.identifier.clone(), value.clone(), self.scope)?;
-                Ok(value)
-            }
-            TokenType::PlusEqual => {
-                let left = environment.get(self.identifier.clone()).cloned()?;
-                let left = (left + value).unwrap();
-                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
-                Ok(left)
-            }
-            TokenType::MinusEqual => {
-                let left = environment.get(self.identifier.clone()).cloned()?;
                 let left = (left - value).unwrap();
-                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
-                Ok(left)
-            }
-            TokenType::StarEqual => {
-                let left = environment.get(self.identifier.clone()).cloned()?;
-                let left = (left * value).unwrap();
-                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
-                Ok(left)
-            }
-            TokenType::SlashEqual => {
-                let left = environment.get(self.identifier.clone()).cloned()?;
-                let left = (left / value).unwrap();
-                environment.assign(self.identifier.clone(), left.clone(), self.scope)?;
-                Ok(left)
-            }
-            _ => Err(RuntimeError::new("Invalid assignment operator".to_string())),
+        if self.operator == TokenType::Equal {
+            environment.assign(self.identifier.clone(), operand.clone(), self.scope)?;
+            return Ok(operand);
         }
+
+        let curr_value = environment.get(self.identifier.clone()).cloned()?;
+        let value = match self.operator {
+            TokenType::PlusEqual => (curr_value.clone() + operand)?,
+            TokenType::MinusEqual => (curr_value.clone() - operand)?,
+            TokenType::StarEqual => (curr_value.clone() * operand)?,
+            TokenType::SlashEqual => (curr_value.clone() / operand)?,
+            _ => unreachable!(),
+        };
+
+        environment.assign(self.identifier.clone(), curr_value.clone(), self.scope)?;
+        Ok(value)
     }
 }
 
@@ -68,10 +54,10 @@ impl Expression for BinaryExpression {
         let right = self.right.evaluate(environment)?;
 
         match self.operator.token_type {
-            TokenType::Plus => Ok((left + right).unwrap()),
-            TokenType::Minus => Ok((left - right).unwrap()),
-            TokenType::Star => Ok((left * right).unwrap()),
-            TokenType::Slash => Ok((left / right).unwrap()),
+            TokenType::Plus => Ok((left + right)?),
+            TokenType::Minus => Ok((left - right)?),
+            TokenType::Star => Ok((left * right)?),
+            TokenType::Slash => Ok((left / right)?),
             TokenType::EqualEqual => Ok(Value::Boolean(left == right)),
             TokenType::BangEqual => Ok(Value::Boolean(left != right)),
             TokenType::Greater => Ok(Value::Boolean(left > right)),
@@ -92,7 +78,7 @@ impl Expression for BinaryExpression {
                     Ok(right)
                 }
             }
-            _ => Err(RuntimeError::new("Invalid binary operator".to_string())),
+            _ => unreachable!(),
         }
     }
 }
@@ -104,7 +90,7 @@ impl Expression for UnaryExpression {
         match self.operator.token_type {
             TokenType::Minus => Ok((-right).unwrap()),
             TokenType::Bang => Ok(!right),
-            _ => Err(RuntimeError::new("Invalid unary operator".to_string())),
+            _ => unreachable!(),
         }
     }
 }
@@ -115,37 +101,41 @@ impl Expression for PostfixExpression {
 
         match self.operator {
             PostfixOperator::Index(ref index) => {
-                let index = index.evaluate(environment)?;
+                let (mut index, is_negative) = match index.evaluate(environment)? {
+                    Value::Number(n) => {
+                        if n.fract() == 0.0 {
+                            (n as usize, n.is_sign_negative())
+                        } else {
+                            return Err(RuntimeError::new(
+                                "Invalid index, expected integer".to_string(),
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(RuntimeError::new(
+                            "Invalid index, expected integer".to_string(),
+                        ));
+                    }
+                };
                 match left {
                     Value::String(string) => {
-                        if let Value::Number(num) = index {
-                            let index = num;
-                            // if the number its negative, we start from the end of the string
-                            let index = if index < 0.0 {
-                                string.len() - index.abs() as usize
-                            } else {
-                                index as usize
-                            };
-                            Ok(Value::String(string[index..index + 1].to_string()))
-                        } else {
-                            return Err(RuntimeError::new("Invalid index operator".to_string()));
+                        // if the number its negative, we start from the end of the string
+                        if is_negative {
+                            index = string.len() - index
                         }
+                        Ok(Value::String(string[index..index + 1].to_string()))
                     }
                     Value::Array(array) => {
-                        if let Value::Number(num) = index {
-                            let index = num;
-                            // if the number its negative, we start from the end of the array
-                            let index = if index < 0.0 {
-                                array.len() - index.abs() as usize
-                            } else {
-                                index as usize
-                            };
-                            Ok(array[index].clone())
-                        } else {
-                            return Err(RuntimeError::new("Invalid index operator".to_string()));
+                        // if the number its negative, we start from the end of the array
+                        if is_negative {
+                            index = array.len() - index
                         }
+                        Ok(array[index].clone())
                     }
-                    _ => Err(RuntimeError::new("Invalid index operator".to_string())),
+                    _ => Err(RuntimeError::new(format!(
+                        "Expression {} does not evaluate to an array or string",
+                        left
+                    ))),
                 }
             }
             PostfixOperator::Dot(ref name) => match left {
@@ -166,6 +156,7 @@ impl Expression for PostfixExpression {
                         .iter()
                         .map(|argument| argument.evaluate(environment))
                         .collect::<RuntimeResult<Vec<Value>>>()?;
+
                     function.call(&mut arguments, environment)
                 }
                 _ => Err(RuntimeError::new("Invalid call operator".to_string())),

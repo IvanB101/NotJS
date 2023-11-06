@@ -53,10 +53,15 @@ while (x < height) {
 }
 
 println ""
-*/
 
 function sum(val1, val2) {
     println "sum: " + (val1 + val2)
 }
 
 sum(1, 2)
+*/
+
+let var = "hola"
+
+println var[2.3]
+

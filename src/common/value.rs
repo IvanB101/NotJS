@@ -1,9 +1,8 @@
+use crate::error::runtime::{RuntimeError, RuntimeResult};
+
 use super::function::Function;
 use core::fmt;
-use std::{
-    io::{Error, Result},
-    ops::{Add, Div, Mul, Neg, Not, Sub},
-};
+use std::ops::{Add, Div, Mul, Neg, Not, Sub};
 
 #[derive(Clone)]
 pub enum Value {
@@ -97,9 +96,9 @@ impl fmt::Display for Value {
 }
 
 impl Add for Value {
-    type Output = Result<Self>;
+    type Output = RuntimeResult<Self>;
 
-    fn add(self, other: Self) -> Result<Self> {
+    fn add(self, other: Self) -> RuntimeResult<Self> {
         match (self, other) {
             (Value::Number(val1), Value::Number(val2)) => Ok(Value::Number(val1 + val2)),
             (Value::String(val1), Value::String(val2)) => Ok(Value::String(val1 + &val2)),
@@ -109,51 +108,51 @@ impl Add for Value {
             (Value::String(val1), Value::Number(val2)) => {
                 Ok(Value::String(val1 + &val2.to_string()))
             }
-            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+            _ => Err(RuntimeError::new("Invalid Operands".into())),
         }
     }
 }
 
 impl Sub for Value {
-    type Output = Result<Self>;
+    type Output = RuntimeResult<Self>;
 
-    fn sub(self, other: Self) -> Result<Self> {
+    fn sub(self, other: Self) -> RuntimeResult<Self> {
         match (self, other) {
             (Value::Number(val1), Value::Number(val2)) => Ok(Value::Number(val1 - val2)),
-            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+            _ => Err(RuntimeError::new("Invalid Operands".into())),
         }
     }
 }
 
 impl Mul for Value {
-    type Output = Result<Self>;
+    type Output = RuntimeResult<Self>;
 
-    fn mul(self, other: Self) -> Result<Self> {
+    fn mul(self, other: Self) -> RuntimeResult<Self> {
         match (self, other) {
             (Value::Number(val1), Value::Number(val2)) => Ok(Value::Number(val1 * val2)),
-            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+            _ => Err(RuntimeError::new("Invalid Operands".into())),
         }
     }
 }
 
 impl Div for Value {
-    type Output = Result<Self>;
+    type Output = RuntimeResult<Self>;
 
-    fn div(self, other: Self) -> Result<Self> {
+    fn div(self, other: Self) -> RuntimeResult<Self> {
         match (self, other) {
             (Value::Number(val1), Value::Number(val2)) => Ok(Value::Number(val1 / val2)),
-            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+            _ => Err(RuntimeError::new("Invalid Operands".into())),
         }
     }
 }
 
 impl Neg for Value {
-    type Output = Result<Self>;
+    type Output = RuntimeResult<Self>;
 
-    fn neg(self) -> Result<Self> {
+    fn neg(self) -> RuntimeResult<Self> {
         match self {
             Value::Number(val1) => Ok(Value::Number(-val1)),
-            _ => Err(Error::new(std::io::ErrorKind::Other, "Invalid Operands")),
+            _ => Err(RuntimeError::new("Invalid Operands".into())),
         }
     }
 }
